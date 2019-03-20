@@ -19,7 +19,7 @@
 ~SIGD[~GENSYM[data_Pos][1]][8];
 ~SIGD[~GENSYM[data_Neg][2]][8];
 ~SIGD[~GENSYM[data_Neg_Latch][3]][8];
-~IF ~ISGATED[3] ~THEN
+~IF ~ISGATED[4] ~THEN
 always @(posedge ~ARG[4][1]~IF ~ISSYNC[5] ~THEN ~ELSE or posedge ~ARG[5]~FI) begin : ~GENSYM[~COMPNAME_ddrIn_pos][6]
   if (~ARG[5]) begin
     ~SYM[1] <= ~ARG[7];
