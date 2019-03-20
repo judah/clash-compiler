@@ -147,7 +147,8 @@ ddrOut clk rst i0 = uncurry (withFrozenCallStack $ ddrOut# clk rst i0) . unbundl
 
 ddrOut# :: ( HasCallStack
            , fast ~ 'Dom n pFast
-           , slow ~ 'Dom n (2*pFast))
+           , slow ~ 'Dom n (2*pFast)
+           , Undefined a)
         => Clock slow gated
         -> Reset slow synchronous
         -> a

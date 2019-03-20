@@ -2,7 +2,7 @@
 module Main (main) where
 
 import Control.Exception (finally)
-import Data.List (isSuffixOf)
+import Data.List (isSuffixOf, (\\))
 import System.Directory (createDirectoryIfMissing, removeDirectoryRecursive)
 import System.Process (readCreateProcessWithExitCode, proc)
 import GHC.Conc (numCapabilities)
@@ -140,6 +140,12 @@ runClashTest =
         , runTest ("tests" </> "shouldwork" </> "DDR") defBuild [] "DDRinGS" (["","DDRinGS_testBench"],"DDRinGS_testBench",True)
         , runTest ("tests" </> "shouldwork" </> "DDR") defBuild [] "DDRinUA" (["","DDRinUA_testBench"],"DDRinUA_testBench",True)
         , runTest ("tests" </> "shouldwork" </> "DDR") defBuild [] "DDRinUS" (["","DDRinUS_testBench"],"DDRinUS_testBench",True)
+        , runTest ("tests" </> "shouldwork" </> "DDR") defBuild [] "DDRoutUA" (["","DDRoutUA_testBench"],"DDRoutUA_testBench",True)
+        , runTest ("tests" </> "shouldwork" </> "DDR") defBuild [] "DDRoutUS" (["","DDRoutUS_testBench"],"DDRoutUS_testBench",True)
+
+        -- Gated clock tests are broken on iverlog. They do pass in ModelSim:
+        , runTest ("tests" </> "shouldwork" </> "DDR") (defBuild \\ [Verilog]) [] "DDRoutGA" (["","DDRoutGA_testBench"],"DDRoutGA_testBench",True)
+        , runTest ("tests" </> "shouldwork" </> "DDR") (defBuild \\ [Verilog]) [] "DDRoutGS" (["","DDRoutGS_testBench"],"DDRoutGS_testBench",True)
         ]
       , clashTestGroup "DSignal"
         [ runTest ("tests" </> "shouldwork" </> "DSignal") defBuild [] "DelayedFold" (["","DelayedFold_testBench"],"DelayedFold_testBench",True)
