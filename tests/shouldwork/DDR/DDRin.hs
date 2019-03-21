@@ -1,5 +1,6 @@
 module DDRin where
 
+import Clash.Explicit.Testbench (ignoreFor)
 import Clash.Prelude (mux)
 import Clash.Explicit.Prelude
 import Clash.Explicit.DDR
@@ -12,27 +13,6 @@ The four variants defined here are all the combinations of
   clock: Gated  or Ungated
   reset: Asynch or Sync
 -}
-
--- | Ignore signal for a number of cycles, while outputting a static value.
-ignoreFor
-  :: forall dom gated sync n a
-   . Clock dom gated
-  -> Reset dom sync
-  -> SNat n
-  -- ^ Number of cycles to ignore incoming signal
-  -> a
-  -- ^ Value function produces when ignoring signal
-  -> Signal dom a
-  -- ^ Incoming signal
-  -> Signal dom a
-ignoreFor clk rst SNat a i =
-  mux ((==) <$> counter <*> (pure maxBound)) i (pure a)
- where
-  counter :: Signal dom (Index (n+1))
-  counter = register clk rst 0 (next <$> counter)
-
-  next c | c == maxBound = maxBound
-         | otherwise     = succ c
 
 topEntityGeneric :: Clock DomReal gated
           -> Reset DomReal synchronous
