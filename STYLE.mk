@@ -1,7 +1,13 @@
 Clash/Haskell Style Guide
 ===================
 
-This is a short document describing the preferred coding style for this project.  I've tried to cover the major areas of formatting and naming.  When something isn't covered by this guide you should stay consistent with the code in the other modules.
+This is a short document describing the preferred coding style for this project. When something isn't covered by this guide you should stay consistent with the code in the other modules. The code style rules should be considered strong suggestions but shouldn't be dogmatically applied - if there's a good reason for breaking them _do it_. If you can't or don't want to apply a guideline or if a guideline is missing, consider:
+
+* **How your style affects future changes.** Does changing part of it cause a lot of realignments? Is it easily extendable by copy-pasting lines? 
+* **Whether whitespace is effectively used.** Do new indent-blocks start 2 spaces deeper than the previous one? Is it easy to see which block is which?
+* **How it scales.** Is the style applicable to small examples as well as large ones?
+
+The guidelines formulated below try to balance the points above.
 
 Formatting
 ----------
@@ -12,7 +18,7 @@ Maximum line length is *80/90[M]/100 characters*.
 
 ### Indentation
 
-Tabs are illegal. Use spaces for indenting.  Indent your code blocks with *2 spaces*. Indent the `where` keyword two spaces to set it apart from the rest of the code and indent the definitions in a `where` clause 1 spaces.  Some examples: 
+Tabs are illegal. Use spaces for indenting.  Indent your code blocks with *2 spaces*. Indent the `where` keyword two spaces to set it apart from the rest of the code and indent the definitions in a `where` clause 1 space.  Some examples: 
 
 ```haskell
 sayHello :: IO ()
@@ -22,22 +28,14 @@ sayHello = do
  where
   greeting name = "Hello, " ++ name ++ "!"
 
--- Alignment =?
-filter :: (a -> Bool) -> [a] -> [a]
-filter _ []     = []
+filter 
+  :: (a -> Bool) 
+  -> [a] 
+  -> [a]
+filter _ [] = []
 filter p (x:xs)
-  | p x                                 = 
-      x : filter p xs
-  | p x                                = x : filter p xs
-  | p x                                = x : filter p xs
-  | p x                                = x : filter p xs
-  
-  
-  
-  | p x            = x : filter p xs
-  | otherwiseeeee 
-    && eeeeeeeeee 
-    && eeeeeeeeeee = filter p xs
+  | p x       = x : filter p xs
+  | otherwise = filter p xs
 ```
 
 ### Blank Lines
@@ -271,7 +269,7 @@ foobar =
       buzz
 ```
 
-Align the `->` arrows when it helps readability, but keep in mind that any changes potentially trigger a lot of realignments. This increases your VCS's diff sizes and becomes burdensome quickly.
+Align the `->` arrows when it helps readability, but keep in mind that any changes potentially trigger a lot of realignments. This increases your VCS's diff sizes and becomes tedious quickly.
 
 ### Type signatures
 Small type signatures can be put on a single line:
@@ -439,32 +437,22 @@ foo n = salt * 32 + 9
 
 ### Links
 
-Use in-line links economically.  You are encouraged to add links for
-API names.  It is not necessary to add links for all API names in a
-Haddock comment.  We therefore recommend adding a link to an API name
-if:
+Use in-line links economically.  You are encouraged to add links for API names.  It is not necessary to add links for all API names in a Haddock comment.  We therefore recommend adding a link to an API name if:
 
-* The user might actually want to click on it for more information (in
-  your judgment), and
+* The user might actually want to click on it for more information (in   your judgment), and
 
-* Only for the first occurrence of each API name in the comment (don't
-  bother repeating a link)
+* Only for the first occurrence of each API name in the comment (don't   bother repeating a link)
 
 Naming
 ------
 
-Use camel case (e.g. `functionName`) when naming functions and upper
-camel case (e.g. `DataType`) when naming data types.
+Use camel case (e.g. `functionName`) when naming functions and upper camel case (e.g. `DataType`) when naming data types.
 
-For readability reasons, don't capitalize all letters when using an
-abbreviation.  For example, write `HttpServer` instead of
-`HTTPServer`.  Exception: Two letter abbreviations, e.g. `IO`.
+For readability reasons, don't capitalize all letters when using an abbreviation.  For example, write `HttpServer` instead of `HTTPServer`.  Exception: Two letter abbreviations, e.g. `IO`.
 
 ### Modules
 
-Use singular when naming modules e.g. use `Data.Map` and
-`Data.ByteString.Internal` instead of `Data.Maps` and
-`Data.ByteString.Internals`.
+Use singular when naming modules e.g. use `Data.Map` and `Data.ByteString.Internal` instead of `Data.Maps` and `Data.ByteString.Internals`.
 
 Dealing with laziness
 ---------------------
@@ -473,10 +461,7 @@ By default, use strict data types and lazy functions.
 
 ### Data types
 
-Constructor fields should be strict, unless there's an explicit reason
-to make them lazy.  This avoids many common pitfalls caused by too much
-laziness and reduces the number of brain cycles the programmer has to
-spend thinking about evaluation order.
+Constructor fields should be strict, unless there's an explicit reason to make them lazy. This avoids many common pitfalls caused by too much laziness and reduces the number of brain cycles the programmer has to spend thinking about evaluation order.
 
 ```haskell
 -- Good
@@ -498,7 +483,7 @@ data Point = Point
 
 Have function arguments be lazy unless you explicitly need them to be strict.
 
-The most common case when you need strict function arguments is in recursion with an accumulator:
+The most common case when you need strict function arguments is in  recursion with an accumulator:
 
 ```haskell
 mysum :: [Int] -> Int
@@ -522,6 +507,4 @@ f = (g .) . h
 
 ### Warnings ###
 
-Code should be compilable with `-Wall -Werror`.  There should be no
-warnings.
-
+Code should be compilable with `-Wall -Werror`.  There should be no warnings.
