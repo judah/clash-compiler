@@ -22,6 +22,8 @@ module Clash.GHC.Evaluator where
 
 import           Control.Applicative (liftA2)
 import           Control.Concurrent.Supply  (Supply,freshId)
+import           Control.DeepSeq            (force)
+import           Control.Exception          (ArithException(..), Exception, tryJust, evaluate)
 import           Control.Monad              (ap)
 import           Control.Monad.Trans.Except (runExcept)
 import           Data.Bits
@@ -69,6 +71,7 @@ import           Clash.Core.Evaluator
 import           Clash.Core.Literal  (Literal (..))
 import           Clash.Core.Name
   (Name (..), NameSort (..), mkUnsafeSystemName)
+import           Clash.Core.Pretty   (showPpr)
 import           Clash.Core.Term     (Pat (..), Term (..))
 import           Clash.Core.Type
   (Type (..), ConstTy (..), LitTy (..), TypeView (..), mkFunTy, mkTyConApp,
@@ -149,16 +152,17 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
        in  reduce (integerToIntLiteral (toInteger $ I# c))
 
   "GHC.Prim.quotInt#" | Just (i,j) <- intLiterals args
-    -> reduce (integerToIntLiteral (i `quot` j))
+    -> reduce $ catchDivByZero (integerToIntLiteral (i `quot` j))
   "GHC.Prim.remInt#" | Just (i,j) <- intLiterals args
-    -> reduce (integerToIntLiteral (i `rem` j))
+    -> reduce $ catchDivByZero (integerToIntLiteral (i `rem` j))
   "GHC.Prim.quotRemInt#" | Just (i,j) <- intLiterals args
     -> let (_,tyView -> TyConApp tupTcNm tyArgs) = splitFunForallTy ty
            (Just tupTc) = lookupUniqMap tupTcNm tcm
            [tupDc] = tyConDataCons tupTc
            (q,r)   = quotRem i j
            ret     = mkApps (Data tupDc) (map Right tyArgs ++
-                    [Left (integerToIntLiteral q), Left (integerToIntLiteral r)])
+                    [Left $ catchDivByZero (integerToIntLiteral q)
+                    ,Left $ catchDivByZero (integerToIntLiteral r)])
        in  reduce ret
 
   "GHC.Prim.andI#" | Just (i,j) <- intLiterals args
@@ -296,16 +300,17 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
                    , Left (Literal . WordLiteral . toInteger $ W# l)])
 
   "GHC.Prim.quotWord#" | Just (i,j) <- wordLiterals args
-    -> reduce (integerToWordLiteral (i `quot` j))
+    -> reduce $ catchDivByZero (integerToWordLiteral (i `quot` j))
   "GHC.Prim.remWord#" | Just (i,j) <- wordLiterals args
-    -> reduce (integerToWordLiteral (i `rem` j))
+    -> reduce $ catchDivByZero (integerToWordLiteral (i `rem` j))
   "GHC.Prim.quotRemWord#" | Just (i,j) <- wordLiterals args
     -> let (_,tyView -> TyConApp tupTcNm tyArgs) = splitFunForallTy ty
            (Just tupTc) = lookupUniqMap tupTcNm tcm
            [tupDc] = tyConDataCons tupTc
            (q,r)   = quotRem i j
            ret     = mkApps (Data tupDc) (map Right tyArgs ++
-                    [Left (integerToWordLiteral q), Left (integerToWordLiteral r)])
+                    [Left $ catchDivByZero (integerToWordLiteral q)
+                    ,Left $ catchDivByZero (integerToWordLiteral r)])
        in  reduce ret
   "GHC.Prim.quotRemWord2#" | [i,j,k'] <- wordLiterals' args
     -> let (_,tyView -> TyConApp tupTcNm tyArgs) = splitFunForallTy ty
@@ -317,8 +322,8 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
            !(# x, y #) = quotRemWord2# a b c
        in  reduce $
            mkApps (Data tupDc) (map Right tyArgs ++
-                   [ Left (Literal . WordLiteral . toInteger $ W# x)
-                   , Left (Literal . WordLiteral . toInteger $ W# y)])
+                   [ Left $ catchDivByZero (Literal . WordLiteral . toInteger $ W# x)
+                   , Left $ catchDivByZero (Literal . WordLiteral . toInteger $ W# y)])
 
   "GHC.Prim.and#" | Just (i,j) <- wordLiterals args
     -> reduce (integerToWordLiteral (i .&. j))
@@ -882,8 +887,8 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
            (q,r) = quotRem i j
     in reduce $
          mkApps (Data tupDc) (map Right tyArgs ++
-                [ Left (integerToIntegerLiteral q)
-                , Left (integerToIntegerLiteral r)])
+                [ Left $ catchDivByZero (integerToIntegerLiteral q)
+                , Left $ catchDivByZero (integerToIntegerLiteral r)])
 
   "GHC.Integer.Type.plusInteger" | Just (i,j) <- integerLiterals args
     -> reduce (integerToIntegerLiteral (i+j))
@@ -899,16 +904,16 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
     -> reduce (integerToIntegerLiteral (negate i))
 
   "GHC.Integer.Type.divInteger" | Just (i,j) <- integerLiterals args
-    -> reduce (integerToIntegerLiteral (i `div` j))
+    -> reduce $ catchDivByZero (integerToIntegerLiteral (i `div` j))
 
   "GHC.Integer.Type.modInteger" | Just (i,j) <- integerLiterals args
-    -> reduce (integerToIntegerLiteral (i `mod` j))
+    -> reduce $ catchDivByZero (integerToIntegerLiteral (i `mod` j))
 
   "GHC.Integer.Type.quotInteger" | Just (i,j) <- integerLiterals args
-    -> reduce (integerToIntegerLiteral (i `quot` j))
+    -> reduce $ catchDivByZero (integerToIntegerLiteral (i `quot` j))
 
   "GHC.Integer.Type.remInteger" | Just (i,j) <- integerLiterals args
-    -> reduce (integerToIntegerLiteral (i `rem` j))
+    -> reduce $ catchDivByZero (integerToIntegerLiteral (i `rem` j))
 
   "GHC.Integer.Type.divModInteger" | Just (i,j) <- integerLiterals args
     -> let (_,tyView -> TyConApp ubTupTcNm [liftedKi,_,intTy,_]) = splitFunForallTy ty
@@ -918,8 +923,8 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
        in  reduce $
            mkApps (Data ubTupDc) [ Right liftedKi, Right liftedKi
                                  , Right intTy,    Right intTy
-                                 , Left (Literal (IntegerLiteral d))
-                                 , Left (Literal (IntegerLiteral m))
+                                 , Left $ catchDivByZero (Literal (IntegerLiteral d))
+                                 , Left $ catchDivByZero (Literal (IntegerLiteral m))
                                  ]
 
   "GHC.Integer.Type.gtInteger" | Just (i,j) <- integerLiterals args
@@ -1626,11 +1631,11 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
   "Clash.Sized.Internal.BitVector.quot#"
     | Just (_, kn) <- extractKnownNat tcm tys
     , Just val <- reifyNat kn (liftBitVector2 (BitVector.quot#) ty tcm tys args)
-    -> reduce val
+    -> reduce $ catchDivByZero val
   "Clash.Sized.Internal.BitVector.rem#"
     | Just (_, kn) <- extractKnownNat tcm tys
     , Just val <- reifyNat kn (liftBitVector2 (BitVector.rem#) ty tcm tys args)
-    -> reduce val
+    -> reduce $ catchDivByZero val
   "Clash.Sized.Internal.BitVector.toInteger#"
     | Just (_, kn) <- extractKnownNat tcm tys
     , [i] <- bitVectorLiterals' args
@@ -1786,11 +1791,11 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
   "Clash.Sized.Internal.Index.quot#"
     | Just (nTy,kn) <- extractKnownNat tcm tys
     , Just (i,j) <- indexLiterals args
-    -> reduce (mkIndexLit ty nTy kn (i `quot` j))
+    -> reduce $ catchDivByZero (mkIndexLit ty nTy kn (i `quot` j))
   "Clash.Sized.Internal.Index.rem#"
     | Just (nTy,kn) <- extractKnownNat tcm tys
     , Just (i,j) <- indexLiterals args
-    -> reduce (mkIndexLit ty nTy kn (i `rem` j))
+    -> reduce $ catchDivByZero (mkIndexLit ty nTy kn (i `rem` j))
   "Clash.Sized.Internal.Index.toInteger#"
     | [PrimVal nm' _ _ [_, Lit (IntegerLiteral i)]] <- args
     , nm' == "Clash.Sized.Internal.Index.fromInteger#"
@@ -1915,19 +1920,19 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
   "Clash.Sized.Internal.Signed.quot#"
     | Just (_, kn) <- extractKnownNat tcm tys
     , Just val <- reifyNat kn (liftSigned2 (Signed.quot#) ty tcm tys args)
-    -> reduce val
+    -> reduce $ catchDivByZero val
   "Clash.Sized.Internal.Signed.rem#"
     | Just (_, kn) <- extractKnownNat tcm tys
     , Just val <- reifyNat kn (liftSigned2 (Signed.rem#) ty tcm tys args)
-    -> reduce val
+    -> reduce $ catchDivByZero val
   "Clash.Sized.Internal.Signed.div#"
     | Just (_, kn) <- extractKnownNat tcm tys
     , Just val <- reifyNat kn (liftSigned2 (Signed.div#) ty tcm tys args)
-    -> reduce val
+    -> reduce $ catchDivByZero val
   "Clash.Sized.Internal.Signed.mod#"
     | Just (_, kn) <- extractKnownNat tcm tys
     , Just val <- reifyNat kn (liftSigned2 (Signed.mod#) ty tcm tys args)
-    -> reduce val
+    -> reduce $ catchDivByZero val
   "Clash.Sized.Internal.Signed.toInteger#"
     | [PrimVal nm' _ _ [_, Lit (IntegerLiteral i)]] <- args
     , nm' == "Clash.Sized.Internal.Signed.fromInteger#"
@@ -2114,11 +2119,11 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
   "Clash.Sized.Internal.Unsigned.quot#"
     | Just (_, kn) <- extractKnownNat tcm tys
     , Just val <- reifyNat kn (liftUnsigned2 (Unsigned.quot#) ty tcm tys args)
-    -> reduce val
+    -> reduce $ catchDivByZero val
   "Clash.Sized.Internal.Unsigned.rem#"
     | Just (_, kn) <- extractKnownNat tcm tys
     , Just val <- reifyNat kn (liftUnsigned2 (Unsigned.rem#) ty tcm tys args)
-    -> reduce val
+    -> reduce $ catchDivByZero val
   "Clash.Sized.Internal.Unsigned.toInteger#"
     | [PrimVal nm' _ _ [_, Lit (IntegerLiteral i)]] <- args
     , nm' == "Clash.Sized.Internal.Unsigned.fromInteger#"
@@ -3260,6 +3265,21 @@ reduceConstant isSubj tcm h k nm ty tys args = case nm of
                    in  Just (h2,k,e')
     reduceWHNF' h' e = let (h2,[],e') = whnf reduceConstant tcm isSubj (h',[],e)
                        in  Just (h2,k,e')
+
+    makeUndefinedIf :: Exception e => (e -> Bool) -> Term -> Term
+    makeUndefinedIf wantToHandle tm =
+      case unsafeDupablePerformIO $ tryJust selectException (evaluate $ force tm) of
+        Right b -> b
+        Left e -> trace (msg e) (evalUndefined resTy)
+      where
+        resTy = getResultTy tcm ty tys
+        selectException e | wantToHandle e = Just e
+                          | otherwise = Nothing
+        msg e = unlines ["Warning: caught exception: \"" ++ show e ++ "\" while trying to evaluate: "
+                        , showPpr (mkApps (Prim nm ty) (map (Left . valToTerm) args))
+                        ]
+
+    catchDivByZero = makeUndefinedIf (==DivideByZero)
 
 evalUndefined :: Type -> Term
 evalUndefined resTy = TyApp (Prim "Clash.GHC.Evaluator.undefined" undefinedTy) resTy

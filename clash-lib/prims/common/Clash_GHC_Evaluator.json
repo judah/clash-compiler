@@ -1,0 +1,8 @@
+[ { "BlackBox" :
+    { "name"      : "Clash.GHC.Evaluator.undefined"
+    , "kind"      : "Expression"
+    , "type"      : "undefined :: forall a . a"
+    , "template"  : "~ERRORO"
+    }
+  }
+]
