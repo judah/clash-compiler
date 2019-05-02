@@ -370,6 +370,9 @@ Always use explicit import lists or `qualified` imports for standard and third p
 Comments
 --------
 
+### Language
+Use American English. Initiali**z**ation, synchroni**z**ation, ..
+
 ### Punctuation
 
 Write proper sentences; start with a capital letter and use proper punctuation.
@@ -449,6 +452,8 @@ Naming
 Use camel case (e.g. `functionName`) when naming functions and upper camel case (e.g. `DataType`) when naming data types.
 
 For readability reasons, don't capitalize all letters when using an abbreviation.  For example, write `HttpServer` instead of `HTTPServer`.  Exception: Two letter abbreviations, e.g. `IO`.
+
+Use American English. That is, `synchronizer`, not `synchroniser`.
 
 ### Modules
 
