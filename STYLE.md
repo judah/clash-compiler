@@ -44,7 +44,39 @@ One blank line between top-level definitions.  No blank lines between type signa
 
 ### Whitespace
 
-Surround binary operators with a single space on either side.  Use your better judgement for the insertion of spaces around arithmetic operators but always be consistent about whitespace on either side of a binary operator.  Don't insert a space after a lambda.
+Surround binary operators with a single space on either side.  Use your better judgement for the insertion of spaces around arithmetic operators but always be consistent about whitespace on either side of a binary operator.  Don't insert a space after a lambda. Add a space after each comma in a tuple:
+
+```haskell
+good = (a, b, c)
+bad = (a,b,c)
+```
+
+Refuse the temptation to use the latter when almost hitting the line-length limit. Restructure your code or use multiline notation instead. An example of a multiline tuple declaration is:
+
+```haskell
+goodMulti =
+  ( a
+  , b
+  , c )
+  
+goodMulti2 = 
+  ( a
+  , b
+  , c 
+  )
+```
+
+Use nested tuples as such:
+
+```haskell
+nested =
+  ( ( a1
+    , a2 )
+  , b
+  , c )
+```  
+
+Similar to `goodMulti2`, you can put the trailing `)` on a new line. Use your judgement.
 
 ### Data Declarations
 
