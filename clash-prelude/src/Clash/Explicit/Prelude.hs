@@ -1,17 +1,17 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
                   2017     , Google Inc.
+                  2019     , Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
 This module defines the explicitly clocked counterparts of the functions
-defined in "Clash.Prelude". Take a look at "Clash.Signal.Explicit" to see how
-you can make multi-clock designs.
+defined in "Clash.Prelude".
 -}
 
-{-# LANGUAGE DataKinds     #-}
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeOperators     #-}
 
 {-# LANGUAGE Unsafe #-}
 
@@ -183,8 +183,10 @@ import Clash.XException
 --
 -- @
 -- window4
----  :: Clock domain gated -> Reset domain synchronous
---   -> 'Signal' domain Int -> 'Vec' 4 ('Signal' domain Int)
+---  :: Clock tag enabled
+--   -> Reset tag polarity
+--   -> 'Signal' tag Int
+--   -> 'Vec' 4 ('Signal' tag Int)
 -- window4 = 'window'
 -- @
 --
@@ -192,12 +194,18 @@ import Clash.XException
 -- [<1,0,0,0>,<2,1,0,0>,<3,2,1,0>,<4,3,2,1>,<5,4,3,2>...
 -- ...
 window
-  :: (KnownNat n, Undefined a, Default a)
-  => Clock domain gated
+  :: ( KnownNat n
+     , KnownDomain tag dom
+     , Undefined a
+     , Default a
+     )
+  => Clock tag enabled
   -- ^ Clock to which the incoming signal is synchronized
-  -> Reset domain synchronous
-  -> Signal domain a               -- ^ Signal to create a window over
-  -> Vec (n + 1) (Signal domain a) -- ^ Window of at least size 1
+  -> Reset tag polarity
+  -> Signal tag a
+  -- ^ Signal to create a window over
+  -> Vec (n + 1) (Signal tag a)
+  -- ^ Window of at least size 1
 window clk rst x = res
   where
     res  = x :> prev
@@ -210,21 +218,29 @@ window clk rst x = res
 -- | Give a delayed window over a 'Signal'
 --
 -- @
--- windowD3 :: Clock domain gated -> Reset domain synchronous
---          -> 'Signal' domain Int -> 'Vec' 3 ('Signal' domain Int)
+-- windowD3
+--   :: Clock tag enabled
+--   -> Reset tag polarity
+--   -> 'Signal' tag Int
+--   -> 'Vec' 3 ('Signal' tag Int)
 -- windowD3 = 'windowD'
 -- @
 --
--- >>> simulateB (windowD3 systemClockGen asyncResetGen) [1::Int,1,2,3,4] :: [Vec 3 Int]
+-- >>> simulateB (windowD3 systemClockGen resetGen) [1::Int,1,2,3,4] :: [Vec 3 Int]
 -- [<0,0,0>,<0,0,0>,<1,0,0>,<2,1,0>,<3,2,1>,<4,3,2>...
 -- ...
 windowD
-  :: (KnownNat n, Undefined a, Default a)
-  => Clock domain gated
+  :: ( KnownNat n
+     , Undefined a
+     , Default a
+     , KnownDomain tag dom )
+  => Clock tag enabled
   -- ^ Clock to which the incoming signal is synchronized
-  -> Reset domain synchronous
-  -> Signal domain a                -- ^ Signal to create a window over
-  -> Vec (n + 1) (Signal domain a)  -- ^ Window of at least size 1
+  -> Reset tag polarity
+  -> Signal tag a
+  -- ^ Signal to create a window over
+  -> Vec (n + 1) (Signal tag a)
+  -- ^ Window of at least size 1
 windowD clk rst x =
   let prev = registerB clk rst (repeat def) next
       next = x +>> prev

@@ -41,8 +41,8 @@ fifoL
 fifoL = fifo `mealy` (0,0,replicate d4 0)
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System (Elm,Bool,Bool)
   -> Signal System (Bool,Bool,Elm)
 topEntity = exposeClockReset fifoL

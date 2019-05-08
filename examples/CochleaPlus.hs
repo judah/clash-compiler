@@ -53,8 +53,8 @@ c_frm (ws,ts,hist) vs = ((ws',ts',hist'),y)
     y   = hist'
 
 topEntity
-  :: Clock  System Source
-  -> Reset  System Asynchronous
+  :: Clock  System Regular
+  -> Reset  System polarity
   -> Signal System (Vec 6 Integer)
   -> Signal System (Vec 12 Integer)
 topEntity = exposeClockReset (c_frm `mealy` (c_ws0,c_ts0,c_hist0))

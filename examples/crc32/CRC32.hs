@@ -15,14 +15,14 @@ crc32Step prevCRC byte = entry `xor` (prevCRC `shiftR` 8)
     entry = asyncRom $(lift crc32Table) (truncateB prevCRC `xor` byte)
 
 crc32
-  :: HiddenClockReset domain gated synchronous
-  => Signal domain (BitVector 8) -> Signal domain (BitVector 32)
+  :: HiddenClockReset tag enabled polarity dom
+  => Signal tag (BitVector 8) -> Signal tag (BitVector 32)
 crc32 = moore crc32Step complement 0xFFFFFFFF . register 0
 
 -- show CRC values as 32-bit unsigned numbers
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System (BitVector 8) -> Signal System (Unsigned 32)
 topEntity = exposeClockReset (fmap unpack . crc32)
 {-# NOINLINE topEntity #-}

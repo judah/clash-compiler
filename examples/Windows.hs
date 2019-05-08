@@ -61,8 +61,8 @@ hfk1d xs = x2 + multwc (x1 - 2 * x2 + x3)
     x3 = xs !! 2
 
 topEntity
-  :: Clock  System Source
-  -> Reset  System Asynchronous
+  :: Clock  System Regular
+  -> Reset  System polarity
   -> Signal System (Vec 2 Temp)
   -> Signal System (Vec 2 Temp)
 topEntity = exposeClockReset ((swarch1d hfk1d) `mealy` (repeat 0))

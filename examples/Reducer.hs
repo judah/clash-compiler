@@ -168,8 +168,8 @@ reducer (dataIn,index) = redOut
     (arg1,arg2,shift,toResMem) = fmapB controller (inp1, inp2, pipe, fromResMem)
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> (Signal System DataInt, Signal System ArrayIndex)
   -> Signal System OutputSignal
 topEntity = exposeClockReset reducer

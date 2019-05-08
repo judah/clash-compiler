@@ -1,6 +1,6 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
-                  2016     , Myrtle Software Ltd
+                  2016-2019, Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 -}
@@ -729,8 +729,12 @@ replaceBit# bv@(BV m v) i (Bit mb b)
                           ]
 
 {-# NOINLINE setSlice# #-}
-setSlice# :: BitVector (m + 1 + i) -> SNat m -> SNat n -> BitVector (m + 1 - n)
-          -> BitVector (m + 1 + i)
+setSlice#
+  :: BitVector (m + 1 + i)
+  -> SNat m
+  -> SNat n
+  -> BitVector (m + 1 - n)
+  -> BitVector (m + 1 + i)
 setSlice# (BV iMask i) m n (BV jMask j) = BV ((iMask .&. mask) .|. jMask')
                                              ((i     .&. mask) .|. j')
   where
@@ -742,8 +746,11 @@ setSlice# (BV iMask i) m n (BV jMask j) = BV ((iMask .&. mask) .|. jMask')
     mask = complement ((2 ^ (m' + 1) - 1) `xor` (2 ^ n' - 1))
 
 {-# NOINLINE split# #-}
-split# :: forall n m . KnownNat n
-       => BitVector (m + n) -> (BitVector m, BitVector n)
+split#
+  :: forall n m
+   . KnownNat n
+  => BitVector (m + n)
+  -> (BitVector m, BitVector n)
 split# (BV m i) = (BV lMask l, BV rMask r)
   where
     n     = fromInteger (natVal (Proxy @n))

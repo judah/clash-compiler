@@ -1,6 +1,7 @@
 {-|
   Copyright  :  (C) 2013-2016, University of Twente,
                     2017     , Google Inc.
+                    2019     , Myrtle Software Ltd
   License    :  BSD2 (see the file LICENSE)
   Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -21,7 +22,7 @@ module Clash.Explicit.Mealy
 where
 
 import           Clash.Explicit.Signal
-  (Bundle (..), Clock, Reset, Signal, register)
+  (KnownDomain, Bundle (..), Clock, Reset, Signal, register)
 import           Clash.XException      (Undefined)
 
 {- $setup
@@ -54,8 +55,8 @@ let macT s (x,y) = (s',s)
 -- mac
 --   :: 'Clock' domain Source
 --   -> 'Reset' domain Asynchronous
---   -> 'Signal' domain (Int, Int)
---   -> 'Signal' domain Int
+--   -> 'Signal' tag (Int, Int)
+--   -> 'Signal' tag Int
 -- mac clk rst = 'mealy' clk rst macT 0
 -- @
 --
@@ -68,25 +69,26 @@ let macT s (x,y) = (s',s)
 --
 -- @
 -- dualMac
---   :: 'Clock' domain gated -> 'Reset' domain synchronous
---   -> ('Signal' domain Int, 'Signal' domain Int)
---   -> ('Signal' domain Int, 'Signal' domain Int)
---   -> 'Signal' domain Int
+--   :: 'Clock' domain enabled -> 'Reset' domain synchronous
+--   -> ('Signal' tag Int, 'Signal' tag Int)
+--   -> ('Signal' tag Int, 'Signal' tag Int)
+--   -> 'Signal' tag Int
 -- dualMac clk rst (a,b) (x,y) = s1 + s2
 --   where
 --     s1 = 'mealy' clk rst mac 0 ('bundle' (a,x))
 --     s2 = 'mealy' clk rst mac 0 ('bundle' (b,y))
 -- @
 mealy
-  :: Undefined s
-  => Clock dom gated
+  :: ( KnownDomain tag dom
+     , Undefined s )
+  => Clock tag enabled
   -- ^ 'Clock' to synchronize to
-  -> Reset dom synchronous
+  -> Reset tag polarity
   -> (s -> i -> (s,o))
   -- ^ Transfer function in mealy machine form: @state -> input -> (newstate,output)@
   -> s
   -- ^ Initial state
-  -> (Signal dom i -> Signal dom o)
+  -> (Signal tag i -> Signal tag o)
   -- ^ Synchronous sequential function with input and output matching that
   -- of the mealy machine
 mealy clk rst f iS =
@@ -122,16 +124,17 @@ mealy clk rst f iS =
 --     (i2,b2) = 'mealyB' clk rst f 3 (i1,c)
 -- @
 mealyB
-  :: ( Undefined s
+  :: ( KnownDomain tag dom
+     , Undefined s
      , Bundle i
      , Bundle o )
-  => Clock dom gated
-  -> Reset dom synchronous
+  => Clock tag enabled
+  -> Reset tag polarity
   -> (s -> i -> (s,o))
   -- ^ Transfer function in mealy machine form: @state -> input -> (newstate,output)@
   -> s
   -- ^ Initial state
-  -> (Unbundled dom i -> Unbundled dom o)
+  -> (Unbundled tag i -> Unbundled tag o)
  -- ^ Synchronous sequential function with input and output matching that
  -- of the mealy machine
 mealyB clk rst f iS i = unbundle (mealy clk rst f iS (bundle i))

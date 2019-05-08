@@ -11,14 +11,14 @@ macT acc (x,y) = (acc',o)
     o    = acc
 
 mac
-  :: HiddenClockReset System Source Asynchronous
+  :: HiddenClockReset System Regular Asynchronous
   => Signal System (Signed 9, Signed 9)
   -> Signal System (Signed 9)
 mac = macT `mealy` 0
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System (Signed 9,Signed 9)
   -> Signal System (Signed 9)
 topEntity clk rst xy = r

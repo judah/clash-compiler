@@ -1,6 +1,7 @@
 {-|
 Copyright  :  (C) 2015-2016, University of Twente,
                   2017     , Google Inc.
+                  2019     , Myrtle Software Ltd.
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -34,9 +35,9 @@ so:
 
 @
 f
-  :: Clock  domain gated
-  -> Signal domain (Unsigned 3)
-  -> Signal domain (Unsigned 9)
+  :: Clock  tag enabled
+  -> Signal tag (Unsigned 3)
+  -> Signal tag (Unsigned 9)
 f clk rd = 'Clash.Class.BitPack.unpack' '<$>' 'romFile' clk d7 \"memory.bin\" rd
 @
 
@@ -53,9 +54,9 @@ number, and a 3-bit signed number:
 
 @
 g
-  :: Clock  domain Source
-  -> Signal domain (Unsigned 3)
-  -> Signal domain (Unsigned 6,Signed 3)
+  :: Clock  tag Regular
+  -> Signal tag (Unsigned 3)
+  -> Signal tag (Unsigned 6,Signed 3)
 g clk rd = 'Clash.Class.BitPack.unpack' '<$>' 'romFile' clk d7 \"memory.bin\" rd
 @
 
@@ -124,13 +125,16 @@ import Clash.XException             (Undefined(deepErrorX))
 -- * See "Clash.Sized.Fixed#creatingdatafiles" for ideas on how to create your
 -- own data files.
 romFilePow2
-  :: forall domain gated n m
+  :: forall tag enabled n m
    . (KnownNat m, KnownNat n)
-  => Clock domain gated        -- ^ 'Clock' to synchronize to
-  -> FilePath                  -- ^ File describing the content of
-                               -- the ROM
-  -> Signal domain (Unsigned n)  -- ^ Read address @rd@
-  -> Signal domain (BitVector m)
+  => Clock tag enabled
+  -- ^ 'Clock' to synchronize to
+  -> FilePath
+  -- ^ File describing the content of
+  -- the ROM
+  -> Signal tag (Unsigned n)
+  -- ^ Read address @rd@
+  -> Signal tag (BitVector m)
   -- ^ The value of the ROM at address @rd@ from the previous clock cycle
 romFilePow2 = \clk -> romFile clk (pow2SNat (SNat @ n))
 {-# INLINE romFilePow2 #-}
@@ -160,15 +164,15 @@ romFilePow2 = \clk -> romFile clk (pow2SNat (SNat @ n))
 -- own data files.
 romFile
   :: (KnownNat m, Enum addr)
-  => Clock domain gated
+  => Clock tag enabled
   -- ^ 'Clock' to synchronize to
   -> SNat n
   -- ^ Size of the ROM
   -> FilePath
   -- ^ File describing the content of the ROM
-  -> Signal domain addr
+  -> Signal tag addr
   -- ^ Read address @rd@
-  -> Signal domain (BitVector m)
+  -> Signal tag (BitVector m)
   -- ^ The value of the ROM at address @rd@ from the previous clock cycle
 romFile = \clk sz file rd -> romFile# clk sz file (fromEnum <$> rd)
 {-# INLINE romFile #-}
@@ -176,15 +180,15 @@ romFile = \clk sz file rd -> romFile# clk sz file (fromEnum <$> rd)
 -- | romFile primitive
 romFile#
   :: KnownNat m
-  => Clock domain gated
+  => Clock tag enabled
   -- ^ 'Clock' to synchronize to
   -> SNat n
   -- ^ Size of the ROM
   -> FilePath
   -- ^ File describing the content of the ROM
-  -> Signal domain Int
+  -> Signal tag Int
   -- ^ Read address @rd@
-  -> Signal domain (BitVector m)
+  -> Signal tag (BitVector m)
   -- ^ The value of the ROM at address @rd@ from the previous clock cycle
 romFile# clk sz file rd =
   delay clk (deepErrorX "First value of romFile is undefined") ((content !) <$> rd)

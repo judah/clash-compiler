@@ -53,8 +53,8 @@ type BitMasterO = (BitRespSig,Bool,I2COut)
                      ]
     }) #-}
 bitMaster
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Unbundled System BitMasterI
   -> Unbundled System BitMasterO
 bitMaster = exposeClockReset (mealyB bitMasterT bitMasterInit)

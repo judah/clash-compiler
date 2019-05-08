@@ -1,6 +1,6 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
-                  2016     , Myrtle Software,
+                  2016-2019, Myrtle Software Ltd,
                   2017     , Google Inc.
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
@@ -8,29 +8,54 @@ Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 Clash has synchronous 'Signal's in the form of:
 
 @
-'Signal' (domain :: 'Domain') a
+'Signal' (tag :: 'Symbol') a
 @
 
 Where /a/ is the type of the value of the 'Signal', for example /Int/ or /Bool/,
-and /domain/ is the /clock-/ (and /reset-/) domain to which the memory elements
+and /tag/ is the /clock-/ (and /reset-/) domain to which the memory elements
 manipulating these 'Signal's belong.
 
-The type-parameter, /domain/, is of the kind 'Domain' which has types of the
-following shape:
+The type-parameter, /tag/, is of the kind 'Symbol' - a simple string. That
+string refers to a single /synthesis domain/. A synthesis domain describes the
+behavior of certain aspects of memory elements in it. More specifically, a
+domain looks like:
 
 @
-data Domain = Dom { domainName :: 'GHC.TypeLits.Symbol', clkPeriod :: 'GHC.TypeLits.Nat' }
+'Domain'
+  { _tag :: 'Symbol'
+  -- ^ Domain name
+  , _period :: 'Nat'
+  -- ^ Clock period in /ps/
+  , _edge :: 'ActiveEdge'
+  -- ^ Determines which edge of the clock registers are sensitive to
+  , _reset :: 'ResetKind'
+  -- ^ Determines how components with reset lines respond to changes
+  , _init :: 'InitBehavior'
+  -- ^ Determines the initial (or "power up") value of various components
+  }
 @
 
-Where /domainName/ is a type-level string ('GHC.TypeLits.Symbol') representing
-the name of the /clock-/ (and /reset-/) domain, and /clkPeriod/ is a type-level
-natural number ('GHC.TypeLits.Nat') representing the clock period (in __ps__)
-of the clock lines in the /clock-domain/.
+Check the documentation of each of the types to see the various options Clash
+provides. In order to specify a domain, an instance of 'KnownDomain' should be
+made. Clash provides an implementation 'System' with some common options
+chosen:
+
+@
+instance KnownDomain "System" ('Domain "System" 10000 'Rising 'Asynchronous 'Defined) where
+  knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
+@
+
+In words, "System" is a synthesis domain with a clock running with a period
+of 10000 /ps/. Memory elements respond to the rising edge of the clock,
+asynchronously to changes in their resets, and have defined power up values
+if applicable.
 
 * __NB__: \"Bad things\"™  happen when you actually use a clock period of @0@,
 so do __not__ do that!
 * __NB__: You should be judicious using a clock with period of @1@ as you can
 never create a clock that goes any faster!
+* __NB__: Whether 'System' has good defaults depends on your target platform.
+Check out 'IntelSystem' and 'XilinxSystem' too!
 -}
 
 {-# LANGUAGE ConstraintKinds     #-}
@@ -39,8 +64,6 @@ never create a clock that goes any faster!
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE MagicHash           #-}
 {-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE RebindableSyntax    #-}
-{-# LANGUAGE OverloadedLabels    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 
@@ -55,18 +78,30 @@ module Clash.Signal
   , BiSignalIn
   , BiSignalOut
   , BiSignalDefault(..)
-  , Domain (..)
+    -- * Domain
+  , KnownDomain(..)
+  , ActiveEdge(..)
+  , SActiveEdge(..)
+  , InitBehavior(..)
+  , SInitBehavior(..)
+  , ResetKind(..)
+  , SResetKind(..)
+  , Domain(..)
+  , SDomain(..)
   , System
     -- * Clock
   , Clock
   , ClockKind (..)
     -- * Reset
   , Reset
-  , ResetKind (..)
-  , unsafeFromAsyncReset
-  , unsafeToAsyncReset
+  , ResetPolarity(..)
   , fromSyncReset
-  , unsafeToSyncReset
+  , syncPolarity
+  , toHighPolarity
+  , toLowPolarity
+  , unsafeFromReset
+  , unsafeToActiveHighReset
+  , unsafeToActiveLowReset
   , resetSynchronizer
     -- * Hidden clocks and resets
     -- $hiddenclockandreset
@@ -100,8 +135,7 @@ module Clash.Signal
     -- * Simulation and testbench functions
   , clockGen
   , tbClockGen
-  , asyncResetGen
-  , syncResetGen
+  , resetGen
   , systemClockGen
   , tbSystemClockGen
   , systemResetGen
@@ -138,7 +172,7 @@ module Clash.Signal
   )
 where
 
-import           GHC.TypeLits          (KnownNat, KnownSymbol)
+import           GHC.TypeLits          (KnownNat, KnownSymbol, AppendSymbol)
 import           Data.Bits             (Bits) -- Haddock only
 import           Data.Maybe            (isJust, fromJust)
 import           Prelude
@@ -190,7 +224,7 @@ arguments:
 It has a hidden clock when it has a:
 
 @
-f :: 'HiddenClock' domain gated => ...
+f :: 'HiddenClock' tag enabled => ...
 @
 
 Constraint.
@@ -198,7 +232,7 @@ Constraint.
 Or it has a hidden reset when it has a:
 
 @
-g :: 'HiddenReset' domain synchronous => ...
+g :: 'HiddenReset' tag polarity => ...
 @
 
 Constraint.
@@ -207,7 +241,7 @@ Or it has both a hidden clock argument and a hidden reset argument when it
 has a:
 
 @
-h :: 'HiddenClockReset' domain gated synchronous => ..
+h :: 'HiddenClockReset' tag enabled polarity => ..
 @
 
 Constraint.
@@ -216,20 +250,20 @@ Given a component with an explicit clock and reset arguments, you can turn them
 into hidden arguments using 'hideClock' and 'hideReset'. So given a:
 
 @
-f :: Clock domain gated -> Reset domain synchronous -> Signal domain a -> ...
+f :: Clock tag enabled -> Reset tag polarity -> Signal tag a -> ...
 @
 
 You hide the clock and reset arguments by:
 
 @
--- g :: 'HiddenClockReset' domain gated synchronous => Signal domain a -> ...
+-- g :: 'HiddenClockReset' tag enabled polarity => Signal tag a -> ...
 g = 'hideClockReset' f
 @
 
 Or, alternatively, by:
 
 @
--- h :: HiddenClockReset domain gated synchronous => Signal domain a -> ...
+-- h :: HiddenClockReset tag enabled polarity dom => Signal tag a -> ...
 h = f 'hasClock' 'hasReset'
 @
 
@@ -238,23 +272,23 @@ h = f 'hasClock' 'hasReset'
 Given a component:
 
 @
-f :: HiddenClockReset domain gated synchronous
-  => Signal domain Int
-  -> Signal domain Int
+f :: HiddenClockReset tag enabled polarity dom
+  => Signal tag Int
+  -> Signal tag Int
 @
 
 which has hidden clock and routed reset arguments, we expose those hidden
 arguments so that we can explicitly apply them:
 
 @
--- g :: Clock domain gated -> Reset domain synchronous -> Signal domain Int -> Signal domain Int
+-- g :: Clock tag enabled -> Reset tag polarity -> Signal tag Int -> Signal tag Int
 g = 'exposeClockReset' f
 @
 
 or, alternatively, by:
 
 @
--- h :: Clock domain gated -> Reset domain synchronous -> Signal domain Int -> Signal domain Int
+-- h :: Clock tag enabled -> Reset tag polarity -> Signal tag Int -> Signal tag Int
 h clk rst = withClock clk rst f
 @
 
@@ -266,8 +300,8 @@ components such as PPLs and 'resetSynchronizer':
 
 @
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System Int
   -> Signal System Int
 topEntity clk rst =
@@ -280,8 +314,8 @@ or, using the alternative method:
 
 @
 topEntity2
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System Int
   -> Signal System Int
 topEntity2 clk rst =
@@ -292,49 +326,63 @@ topEntity2 clk rst =
 
 -}
 
+
+
+type HiddenClockName tag = AppendSymbol tag "_clk"
+type HiddenResetName tag = AppendSymbol tag "_rst"
+
 -- | A /constraint/ that indicates the component has a hidden 'Clock'
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
-type HiddenClock domain gated = Hidden "clk" (Clock domain gated)
+type HiddenClock tag enabled dom =
+  ( Hidden (HiddenClockName tag) (Clock tag enabled)
+  , KnownDomain tag dom )
 
 -- | A /constraint/ that indicates the component needs a 'Reset'
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
-type HiddenReset domain synchronous = Hidden "rst" (Reset domain synchronous)
+type HiddenReset tag polarity dom =
+  ( Hidden (HiddenResetName tag) (Reset tag polarity)
+  , KnownDomain tag dom )
 
 -- | A /constraint/ that indicates the component needs a 'Clock' and 'Reset'
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
-type HiddenClockReset domain gated synchronous =
-  (HiddenClock domain gated, HiddenReset domain synchronous)
+type HiddenClockReset tag enabled polarity dom =
+  ( HiddenClock tag enabled dom
+  , HiddenReset tag polarity dom )
 
 -- | A /constraint/ that indicates the component needs a 'Clock' and a 'Reset'
--- belonging to the 'System' domain.
+-- belonging to the 'System' tag.
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
-type SystemClockReset = HiddenClockReset System 'Source 'Asynchronous
+type SystemClockReset =
+  ( Hidden (HiddenClockName System) (Clock System 'Regular)
+  , Hidden (HiddenResetName System) (Reset System 'ActiveHigh) )
 
 -- | Expose the hidden 'Clock' argument of a component, so it can be applied
 -- explicitly
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
 exposeClock
-  :: (HiddenClock domain gated => r)
+  :: forall tag dom enabled r
+   . (HiddenClock tag enabled dom => r)
   -- ^ The component with a hidden clock
-  -> (Clock domain gated -> r)
+  -> (KnownDomain tag dom => Clock tag enabled -> r)
   -- ^ The component with its clock argument exposed
-exposeClock = \f clk -> expose @"clk" f clk
+exposeClock = \f clk -> expose @(HiddenClockName tag) f clk
 {-# INLINE exposeClock #-}
 
 -- | Hide the 'Clock' argument of a component, so it can be routed implicitly.
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
 hideClock
-  :: HiddenClock domain gated
-  => (Clock domain gated -> r)
+  :: forall tag dom enabled r
+   . HiddenClock tag enabled dom
+  => (Clock tag enabled -> r)
   -- ^ Function whose clock argument you want to hide
   -> r
-hideClock = \f -> f #clk
+hideClock = \f -> f (fromLabel @(HiddenClockName tag))
 {-# INLINE hideClock #-}
 
 -- | Connect an explicit 'Clock' to a function with a hidden 'Clock' argument.
@@ -343,12 +391,14 @@ hideClock = \f -> f #clk
 -- withClock = 'flip' exposeClock
 -- @
 withClock
-  :: Clock domain gated
+  :: forall tag dom enabled r
+   . KnownDomain tag dom
+  => Clock tag enabled
   -- ^ The 'Clock' we want to connect
-  -> (HiddenClock domain gated => r)
+  -> (HiddenClock tag enabled dom => r)
   -- ^ The function with a hidden 'Clock' argument
   -> r
-withClock = \clk f -> expose @"clk" f clk
+withClock = \clk f -> expose @(HiddenClockName tag) f clk
 {-# INLINE withClock #-}
 
 -- | Connect a hidden 'Clock' to an argument where a normal 'Clock' argument
@@ -356,9 +406,10 @@ withClock = \clk f -> expose @"clk" f clk
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
 hasClock
-  :: HiddenClock domain gated
-  => Clock domain gated
-hasClock = #clk
+  :: forall tag dom enabled
+   . HiddenClock tag enabled dom
+  => Clock tag enabled
+hasClock = fromLabel @(HiddenClockName tag)
 {-# INLINE hasClock #-}
 
 -- | Expose the hidden 'Reset' argument of a component, so it can be applied
@@ -366,22 +417,24 @@ hasClock = #clk
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
 exposeReset
-  :: (HiddenReset domain synchronous => r)
+  :: forall tag polarity dom r
+   . (HiddenReset tag polarity dom => r)
   -- ^ The component with a hidden reset
-  -> (Reset domain synchronous -> r)
+  -> (KnownDomain tag dom => Reset tag polarity -> r)
   -- ^ The component with its reset argument exposed
-exposeReset = \f rst -> expose @"rst" f rst
+exposeReset = \f rst -> expose @(HiddenResetName tag) f rst
 {-# INLINE exposeReset #-}
 
 -- | Hide the 'Reset' argument of a component, so it can be routed implicitly.
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
 hideReset
-  :: HiddenReset domain synchronous
-  => (Reset domain synchronous -> r)
+  :: forall tag polarity dom r
+   . HiddenReset tag polarity dom
+  => (Reset tag polarity -> r)
   -- ^ Component whose reset argument you want to hide
   -> r
-hideReset = \f -> f #rst
+hideReset = \f -> f (fromLabel @(HiddenResetName tag))
 {-# INLINE hideReset #-}
 
 -- | Connect an explicit 'Reset' to a function with a hidden 'Reset' argument.
@@ -392,12 +445,14 @@ hideReset = \f -> f #rst
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
 withReset
-  :: Reset domain synchronous
+  :: forall tag polarity dom r
+   . KnownDomain tag dom
+  => Reset tag polarity
   -- ^ The 'Reset' we want to connect
-  -> (HiddenReset domain synchronous => r)
+  -> (HiddenReset tag polarity dom => r)
   -- ^ The function with a hidden 'Reset' argument
   -> r
-withReset = \rst f -> expose @"rst" f rst
+withReset = \rst f -> expose @(HiddenResetName tag) f rst
 {-# INLINE withReset #-}
 
 -- | Connect a hidden 'Reset' to an argument where a normal 'Reset' argument
@@ -405,9 +460,10 @@ withReset = \rst f -> expose @"rst" f rst
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
 hasReset
-  :: HiddenReset domain synchronous
-  => Reset domain synchronous
-hasReset = #rst
+  :: forall tag polarity dom
+   . HiddenReset tag polarity dom
+  => Reset tag polarity
+hasReset = fromLabel @(HiddenResetName tag)
 {-# INLINE hasReset #-}
 
 -- | Expose the hidden 'Clock' and 'Reset' arguments of a component, so they can
@@ -431,11 +487,17 @@ hasReset = #rst
 --     rst            = systemResetGen
 -- @
 exposeClockReset
-  :: (HiddenClockReset domain gated synchronous => r)
+  :: forall tag dom enabled polarity r
+   . (HiddenClockReset tag enabled polarity dom => r)
   -- ^ The component with hidden clock and reset arguments
-  -> (Clock domain gated -> Reset domain synchronous -> r)
+  -> (KnownDomain tag dom => Clock tag enabled -> Reset tag polarity -> r)
   -- ^ The component with its clock and reset arguments exposed
-exposeClockReset = \f clk rst -> expose @"rst" (expose @"clk" f clk) rst
+exposeClockReset =
+  \f clk rst ->
+    expose
+      @(HiddenResetName tag)
+      (expose @(HiddenClockName tag) f clk)
+      rst
 {-# INLINE exposeClockReset #-}
 
 -- -- | Hide the 'Clock' and 'Reset' arguments of a component, so they can be
@@ -443,11 +505,12 @@ exposeClockReset = \f clk rst -> expose @"rst" (expose @"clk" f clk) rst
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
 hideClockReset
-  :: HiddenClockReset domain gated synchronous
-  => (Clock domain gated -> Reset domain synchronous -> r)
+  :: forall tag dom enabled polarity r
+   . HiddenClockReset tag enabled polarity dom
+  => (Clock tag enabled -> Reset tag polarity -> r)
   -- ^ Component whose clock and reset argument you want to hide
   -> r
-hideClockReset = \f -> f #clk #rst
+hideClockReset = \f -> f (fromLabel @(HiddenClockName tag)) (fromLabel @(HiddenResetName tag))
 {-# INLINE hideClockReset #-}
 
 -- | Connect an explicit 'Clock' and 'Reset' to a function with a hidden
@@ -455,14 +518,21 @@ hideClockReset = \f -> f #clk #rst
 --
 -- <Clash-Signal.html#hiddenclockandreset Click here to read more about hidden clocks and resets>
 withClockReset
-  :: Clock domain gated
+  :: forall tag dom enabled polarity r
+   . KnownDomain tag dom
+  => Clock tag enabled
   -- ^ The 'Clock' we want to connect
-  -> Reset domain synchronous
+  -> Reset tag polarity
   -- ^ The 'Reset' we want to connect
-  -> (HiddenClockReset domain gated synchronous => r)
+  -> (HiddenClockReset tag enabled polarity dom => r)
   -- ^ The function with a hidden 'Clock' and hidden 'Reset' argument
   -> r
-withClockReset = \clk rst f -> expose @"rst" (expose @"clk" f clk) rst
+withClockReset =
+  \clk rst f ->
+    expose
+      @(HiddenResetName tag)
+      (expose @(HiddenClockName tag) f clk)
+      rst
 {-# INLINE withClockReset #-}
 
 -- * Basic circuit functions
@@ -470,73 +540,78 @@ withClockReset = \clk rst f -> expose @"rst" (expose @"clk" f clk) rst
 -- | 'delay' @s@ delays the values in 'Signal' @s@ for once cycle, the value
 -- at time 0 is /dflt/.
 --
--- >>> sampleN 3 (delay 0 (fromList [1,2,3,4]))
+-- >>> sampleN @System 3 (delay 0 (fromList [1,2,3,4]))
 -- [0,1,2]
 delay
-  :: ( Undefined a
-     , HiddenClock domain gated )
+  :: forall tag dom enabled a
+   . ( Undefined a
+     , HiddenClock tag enabled dom )
   => a
   -- ^ Default value
-  -> Signal domain a
+  -> Signal tag a
   -- ^ Signal to delay
-  -> Signal domain a
+  -> Signal tag a
 delay dflt i =
-  delay# #clk dflt i
+  delay# (fromLabel @(HiddenClockName tag)) dflt i
 {-# INLINE delay #-}
 
 -- | Version of 'delay' that only updates when its second argument is a 'Just'
 -- value.
 --
 -- >>> let input = fromList [Just 1, Just 2, Nothing, Nothing, Just 5, Just 6, Just (7::Int)]
--- >>> sampleN 7 (delayMaybe 0 input)
+-- >>> sampleN @System 7 (delayMaybe 0 input)
 -- [0,1,2,2,2,5,6]
 delayMaybe
-  :: ( Undefined a
-     , HiddenClock domain gated )
+  :: forall tag dom enabled a
+   . ( Undefined a
+    , HiddenClock tag enabled dom )
   => a
   -- ^ Initial value
-  -> Signal domain (Maybe a)
-  -> Signal domain a
+  -> Signal tag (Maybe a)
+  -> Signal tag a
 delayMaybe dflt i =
-  E.delayMaybe #clk dflt i
+  E.delayMaybe (fromLabel @(HiddenClockName tag)) dflt i
 {-# INLINE delayMaybe #-}
 
 -- | Version of 'delay' that only updates when its second argument is asserted.
 --
 -- >>> let input = fromList [1,2,3,4,5,6,7::Int]
 -- >>> let enable = fromList [True,True,False,False,True,True,True]
--- >>> sampleN 7 (delayEn 0 enable input)
+-- >>> sampleN @System 7 (delayEn 0 enable input)
 -- [0,1,2,2,2,5,6]
 delayEn
-  :: ( Undefined a
-     , HiddenClock domain gated )
+  :: forall tag dom enabled a
+   . ( Undefined a
+     , HiddenClock tag enabled dom )
   => a
   -- ^ Initial value
-  -> Signal domain Bool
+  -> Signal tag Bool
   -- ^ Enable
-  -> Signal domain a
-  -> Signal domain a
+  -> Signal tag a
+  -> Signal tag a
 delayEn dflt en i =
-  E.delayEn #clk dflt en i
+  E.delayEn (fromLabel @(HiddenClockName tag)) dflt en i
 {-# INLINE delayEn #-}
 
 -- | 'register' @i s@ delays the values in 'Signal' @s@ for one cycle, and sets
 -- the value at time 0 to @i@
 --
--- >>> sampleN 5 (register 8 (fromList [1,1,2,3,4]))
+-- >>> sampleN @System 5 (register 8 (fromList [1,1,2,3,4]))
 -- [8,8,1,2,3]
 register
-  :: ( Undefined a
-     , HiddenClockReset domain gated synchronous )
+  :: forall tag dom enabled polarity a
+   . ( KnownDomain tag dom
+     , Undefined a )
+  => HiddenClockReset tag enabled polarity dom
   => a
   -- ^ Reset value
   --
   -- 'register' has an /active-hig/h 'Reset', meaning that 'register' outputs the
   -- reset value when the reset value becomes 'True'
-  -> Signal domain a
-  -> Signal domain a
+  -> Signal tag a
+  -> Signal tag a
 register i s =
-  E.register #clk #rst i s
+  E.register (fromLabel @(HiddenClockName tag)) (fromLabel @(HiddenResetName tag)) i s
 {-# INLINE register #-}
 infixr 3 `register`
 
@@ -557,22 +632,27 @@ infixr 3 `register`
 --
 -- We get:
 --
--- >>> sampleN 9 sometimes1
+-- >>> sampleN @System 9 sometimes1
 -- [Nothing,Nothing,Just 1,Nothing,Just 1,Nothing,Just 1,Nothing,Just 1]
--- >>> sampleN 9 countSometimes
+-- >>> sampleN @System 9 countSometimes
 -- [0,0,0,1,1,2,2,3,3]
 regMaybe
-  :: ( Undefined a
-     , HiddenClockReset domain gated synchronous )
+  :: forall tag dom enabled polarity a
+   . ( HiddenClockReset tag enabled polarity dom
+     , Undefined a )
   => a
   -- ^ Reset value
   --
   -- 'regMaybe' has an /active-high/ 'Reset', meaning that 'regMaybe' outputs the
   -- reset value when the reset value becomes 'True'
-  -> Signal domain (Maybe a)
-  -> Signal domain a
+  -> Signal tag (Maybe a)
+  -> Signal tag a
 regMaybe initial iM =
-  E.register (clockGate #clk (fmap isJust iM)) #rst initial (fmap fromJust iM)
+  E.register
+    (toEnabledClock (fromLabel @(HiddenClockName tag)) (fmap isJust iM))
+    (fromLabel @(HiddenResetName tag))
+    initial
+    (fmap fromJust iM)
 {-# INLINE regMaybe #-}
 infixr 3 `regMaybe`
 
@@ -586,23 +666,28 @@ infixr 3 `regMaybe`
 --
 -- We get:
 --
--- >>> sampleN 9 oscillate
+-- >>> sampleN @System 9 oscillate
 -- [False,False,True,False,True,False,True,False,True]
--- >>> sampleN 9 count
+-- >>> sampleN @System 9 count
 -- [0,0,0,1,1,2,2,3,3]
 regEn
-  :: ( Undefined a
-     , HiddenClockReset domain gated synchronous )
+  :: forall tag dom enabled polarity a
+   . ( HiddenClockReset tag enabled polarity dom
+     , Undefined a )
   => a
   -- ^ Reset value
   --
   -- 'regEn' has an /active-high/ 'Reset', meaning that 'regEn' outputs the
   -- reset value when the reset value becomes 'True'
-  -> Signal domain Bool
-  -> Signal domain a
-  -> Signal domain a
+  -> Signal tag Bool
+  -> Signal tag a
+  -> Signal tag a
 regEn initial en i =
-  E.register (clockGate #clk en) #rst initial i
+  E.register
+    (toEnabledClock (fromLabel @(HiddenClockName tag)) en)
+    (fromLabel @(HiddenResetName tag))
+    initial
+    i
 {-# INLINE regEn #-}
 
 -- * Signal -> List conversion
@@ -614,22 +699,22 @@ regEn initial en i =
 --
 -- > sample s == [s0, s1, s2, s3, ...
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 sample
-  :: forall gated synchronous domain a
-   . Undefined a
-  => (HiddenClockReset domain gated synchronous => Signal domain a)
+  :: forall tag dom a
+   . ( KnownDomain tag dom
+     , Undefined a )
+  => (HiddenClockReset tag 'Regular 'ActiveHigh dom => Signal tag a)
   -- ^ 'Signal' we want to sample, whose source potentially has a hidden clock
   -- (and reset)
   -> [a]
 sample s =
-  let clk = unsafeCoerce @(Clock System 'Gated)
-                         @(Clock domain gated)
-                         (GatedClock @System SSymbol SNat (pure True))
-      rst = unsafeCoerce @(Reset System 'Asynchronous)
-                         @(Reset domain synchronous)
-                         (Async (True :- pure False))
-  in  S.sample (exposeClockReset s clk rst)
+  case knownDomain' @tag of
+    SDomain tag _ _ _ _ ->
+      let clk = RegularClock tag in
+      let rst = ActiveHighReset @tag (True :- pure False) in
+      S.sample (exposeClockReset s clk rst)
+
 {-# NOINLINE sample #-}
 
 -- | Get a list of /n/ samples from a 'Signal'
@@ -637,26 +722,25 @@ sample s =
 -- The elements in the list correspond to the values of the 'Signal'
 -- at consecutive clock cycles
 --
--- > sampleN 3 s == [s0, s1, s2]
+-- > sampleN @System 3 s == [s0, s1, s2]
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 sampleN
-  :: forall gated synchronous domain a
-   . Undefined a
+  :: forall tag dom a
+   . ( KnownDomain tag dom
+     , Undefined a )
   => Int
   -- ^ The number of samples we want to see
-  -> (HiddenClockReset domain gated synchronous => Signal domain a)
+  -> (HiddenClockReset tag 'Regular 'ActiveHigh dom => Signal tag a)
   -- ^ 'Signal' we want to sample, whose source potentially has a hidden clock
   -- (and reset)
   -> [a]
 sampleN n s =
-  let clk = unsafeCoerce @(Clock System 'Gated)
-                         @(Clock domain gated)
-                         (GatedClock @System SSymbol SNat (pure True))
-      rst = unsafeCoerce @(Reset System 'Asynchronous)
-                         @(Reset domain synchronous)
-                         (Async (True :- pure False))
-  in  S.sampleN n (exposeClockReset s clk rst)
+  case knownDomain' @tag of
+    SDomain tag _ _ _ _ ->
+      let clk = RegularClock tag in
+      let rst = ActiveHighReset @tag (True :- pure False) in
+      S.sampleN n (exposeClockReset s clk rst)
 {-# NOINLINE sampleN #-}
 
 -- | /Lazily/ get an infinite list of samples from a 'Clash.Signal.Signal'
@@ -668,19 +752,18 @@ sampleN n s =
 --
 -- __NB__: This function is not synthesizable
 sample_lazy
-  :: forall gated synchronous domain a
-   . (HiddenClockReset domain gated synchronous => Signal domain a)
+  :: forall tag dom a
+   . KnownDomain tag dom
+  => (HiddenClockReset tag 'Regular 'ActiveHigh dom => Signal tag a)
   -- ^ 'Signal' we want to sample, whose source potentially has a hidden clock
   -- (and reset)
   -> [a]
 sample_lazy s =
-  let clk = unsafeCoerce @(Clock System 'Gated)
-                         @(Clock domain gated)
-                         (GatedClock @System SSymbol SNat (pure True))
-      rst = unsafeCoerce @(Reset System 'Asynchronous)
-                         @(Reset domain synchronous)
-                         (Async (True :- pure False))
-  in  S.sample_lazy (exposeClockReset s clk rst)
+  case knownDomain' @tag of
+    SDomain tag _ _ _ _ ->
+      let clk = RegularClock tag in
+      let rst = ActiveHighReset @tag (True :- pure False) in
+      S.sample_lazy (exposeClockReset s clk rst)
 {-# NOINLINE sample_lazy #-}
 
 -- | Lazily get a list of /n/ samples from a 'Signal'
@@ -688,24 +771,23 @@ sample_lazy s =
 -- The elements in the list correspond to the values of the 'Signal'
 -- at consecutive clock cycles
 --
--- > sampleN 3 s == [s0, s1, s2]
+-- > sampleN @System 3 s == [s0, s1, s2]
 --
 -- __NB__: This function is not synthesizable
 sampleN_lazy
-  :: forall gated synchronous domain a
-   . Int
-  -> (HiddenClockReset domain gated synchronous => Signal domain a)
+  :: forall tag dom a
+   . KnownDomain tag dom
+  => Int
+  -> (HiddenClockReset tag 'Regular 'ActiveHigh dom => Signal tag a)
   -- ^ 'Signal' we want to sample, whose source potentially has a hidden clock
   -- (and reset)
   -> [a]
 sampleN_lazy n s =
-  let clk = unsafeCoerce @(Clock System 'Gated)
-                         @(Clock domain gated)
-                         (GatedClock @System SSymbol SNat (pure True))
-      rst = unsafeCoerce @(Reset System 'Asynchronous)
-                         @(Reset domain synchronous)
-                         (Async (True :- pure False))
-  in  S.sampleN_lazy n (exposeClockReset s clk rst)
+  case knownDomain' @tag of
+    SDomain tag _ _ _ _ ->
+      let clk = RegularClock tag in
+      let rst = ActiveHighReset @tag (True :- pure False) in
+      S.sampleN_lazy n (exposeClockReset s clk rst)
 {-# NOINLINE sampleN_lazy #-}
 
 -- * Simulation functions
@@ -713,108 +795,112 @@ sampleN_lazy n s =
 -- | Simulate a (@'Signal' a -> 'Signal' b@) function given a list of samples
 -- of type /a/
 --
--- >>> simulate (register 8) [1, 2, 3]
+-- >>> simulate @System (register 8) [1, 2, 3]
 -- [8,1,2,3...
 -- ...
 --
--- __NB__: This function is not synthesisable
+-- Where 'System' denotes the /domain/ to simulate on.
+--
+-- __NB__: This function is not synthesizable
 simulate
-  :: forall gated synchronous domain a b
-   . (Undefined a, Undefined b)
-  => (HiddenClockReset domain gated synchronous =>
-      Signal domain a -> Signal domain b)
+  :: forall tag dom a b
+   . ( KnownDomain tag dom
+     , Undefined a
+     , Undefined b )
+  => (HiddenClockReset tag 'Regular 'ActiveHigh dom =>
+      Signal tag a -> Signal tag b)
   -- ^ 'Signal' we want to sample, whose source potentially has a hidden clock
   -- (and reset)
   -> [a]
   -> [b]
 simulate f =
-  let clk = unsafeCoerce @(Clock System 'Gated)
-                         @(Clock domain gated)
-                         (GatedClock @System SSymbol SNat (pure True))
-      rst = unsafeCoerce @(Reset System 'Asynchronous)
-                         @(Reset domain synchronous)
-                         (Async (True :- pure False))
-  in  tail . S.simulate (exposeClockReset f clk rst) . dup1
+  case knownDomain' @tag of
+    SDomain tag _ _ _ _ ->
+      let clk = RegularClock tag in
+      let rst = ActiveHighReset @tag (True :- pure False) in
+      -- TODO: Explain why we skip the the first value here
+      tail . S.simulate (exposeClockReset f clk rst) . dup1
 {-# NOINLINE simulate #-}
 
 -- | /Lazily/ simulate a (@'Signal' a -> 'Signal' b@) function given a list of
 -- samples of type /a/
 --
--- >>> simulate (register 8) [1, 2, 3]
+-- >>> simulate @System (register 8) [1, 2, 3]
 -- [8,1,2,3...
 -- ...
 --
 -- __NB__: This function is not synthesizable
 simulate_lazy
-  :: forall gated synchronous domain a b
-   . (HiddenClockReset domain gated synchronous =>
-      Signal domain a -> Signal domain b)
+  :: forall tag dom a b
+   . KnownDomain tag dom
+  => (HiddenClockReset tag 'Regular 'ActiveHigh dom =>
+      Signal tag a -> Signal tag b)
   -- ^ Function we want to simulate, whose components potentially have a hidden
   -- clock (and reset)
   -> [a]
   -> [b]
 simulate_lazy f =
-  let clk = unsafeCoerce @(Clock System 'Gated)
-                         @(Clock domain gated)
-                         (GatedClock @System SSymbol SNat (pure True))
-      rst = unsafeCoerce @(Reset System 'Asynchronous)
-                         @(Reset domain synchronous)
-                         (Async (True :- pure False))
-  in  tail . S.simulate_lazy (exposeClockReset f clk rst) . dup1
+  case knownDomain' @tag of
+    SDomain tag _ _ _ _ ->
+      let clk = RegularClock tag in
+      let rst = ActiveHighReset @tag (True :- pure False) in
+      tail . S.simulate_lazy (exposeClockReset f clk rst) . dup1
 {-# NOINLINE simulate_lazy #-}
 
 -- | Simulate a (@'Unbundled' a -> 'Unbundled' b@) function given a list of
 -- samples of type @a@
 --
--- >>> simulateB (unbundle . register (8,8) . bundle) [(1,1), (2,2), (3,3)] :: [(Int,Int)]
+-- >>> simulateB @System (unbundle . register (8,8) . bundle) [(1,1), (2,2), (3,3)] :: [(Int,Int)]
 -- [(8,8),(1,1),(2,2),(3,3)...
 -- ...
 --
 -- __NB__: This function is not synthesisable
 simulateB
-  :: forall gated synchronous domain a b
-   . (Bundle a, Bundle b, Undefined a, Undefined b)
-  => (HiddenClockReset domain gated synchronous =>
-      Unbundled domain a -> Unbundled domain b)
+  :: forall tag dom a b
+   . ( KnownDomain tag dom
+     , Bundle a
+     , Bundle b
+     , Undefined a
+     , Undefined b )
+  => (HiddenClockReset tag 'Regular 'ActiveHigh dom =>
+      Unbundled tag a -> Unbundled tag b)
   -- ^ Function we want to simulate, whose components potentially have a hidden
   -- clock (and reset)
   -> [a]
   -> [b]
 simulateB f =
-  let clk = unsafeCoerce @(Clock System 'Gated)
-                         @(Clock domain gated)
-                         (GatedClock @System SSymbol SNat (pure True))
-      rst = unsafeCoerce @(Reset System 'Asynchronous)
-                         @(Reset domain synchronous)
-                         (Async (True :- pure False))
-  in  tail . S.simulateB (exposeClockReset f clk rst) . dup1
+  case knownDomain' @tag of
+    SDomain tag _ _ _ _ ->
+      let clk = RegularClock tag in
+      let rst = ActiveHighReset @tag (True :- pure False) in
+      tail . S.simulateB (exposeClockReset f clk rst) . dup1
 {-# NOINLINE simulateB #-}
 
 -- | /Lazily/ simulate a (@'Unbundled' a -> 'Unbundled' b@) function given a
 -- list of samples of type @a@
 --
--- >>> simulateB (unbundle . register (8,8) . bundle) [(1,1), (2,2), (3,3)] :: [(Int,Int)]
+-- >>> simulateB @System (unbundle . register (8,8) . bundle) [(1,1), (2,2), (3,3)] :: [(Int,Int)]
 -- [(8,8),(1,1),(2,2),(3,3)...
 -- ...
 --
 -- __NB__: This function is not synthesizable
 simulateB_lazy
-  :: forall gated synchronous domain a b
-   . (Bundle a, Bundle b)
-  => (HiddenClockReset domain gated synchronous =>
-      Unbundled domain a -> Unbundled domain b)
+  :: forall tag dom a b
+   . ( KnownDomain tag dom
+     , Bundle a
+     , Bundle b )
+  => (HiddenClockReset tag 'Regular 'ActiveHigh dom =>
+      Unbundled tag a -> Unbundled tag b)
   -- ^ Function we want to simulate, whose components potentially have a hidden
   -- clock (and reset)
   -> [a]
   -> [b]
 simulateB_lazy f =
-  let clk = unsafeCoerce @(Clock System 'Gated)
-                         @(Clock domain gated)
-                         (GatedClock @System SSymbol SNat (pure True))
-      rst = unsafeCoerce @(Reset System 'Asynchronous)
-                         @(Reset domain synchronous)
-                         (Async (True :- pure False))
-  in  tail . S.simulateB_lazy (exposeClockReset f clk rst) . dup1
+  case knownDomain' @tag of
+    SDomain tag _ _ _ _ ->
+      let clk = RegularClock tag in
+      let rst = ActiveHighReset @tag (True :- pure False) in
+      tail . S.simulateB_lazy (exposeClockReset f clk rst) . dup1
 {-# NOINLINE simulateB_lazy #-}
 
 dup1 :: [a] -> [a]
@@ -825,9 +911,10 @@ dup1 _      = error "empty list"
 
 -- |  @testFor n s@ tests the signal /s/ for /n/ cycles.
 testFor
-  :: Int
+  :: KnownDomain tag dom
+  => Int
   -- ^ The number of cycles we want to test for
-  -> (HiddenClockReset domain gated synchronous => Signal domain Bool)
+  -> (HiddenClockReset tag 'Regular 'ActiveHigh dom => Signal tag Bool)
   -- ^ 'Signal' we want to evaluate, whose source potentially has a hidden clock
   -- (and reset)
   -> Property

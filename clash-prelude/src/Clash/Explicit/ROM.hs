@@ -1,6 +1,7 @@
 {-|
 Copyright  :  (C) 2015-2016, University of Twente,
                   2017     , Google Inc.
+                  2019     , Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -47,12 +48,16 @@ import Clash.XException       (errorX, seqX)
 -- for ideas on how to use ROMs and RAMs
 romPow2
   :: KnownNat n
-  => Clock domain gated         -- ^ 'Clock' to synchronize to
-  -> Vec (2^n) a                -- ^ ROM content
-                                --
-                                -- __NB:__ must be a constant
-  -> Signal domain (Unsigned n) -- ^ Read address @rd@
-  -> Signal domain a            -- ^ The value of the ROM at address @rd@
+  => Clock tag enabled
+  -- ^ 'Clock' to synchronize to
+  -> Vec (2^n) a
+  -- ^ ROM content
+  --
+  -- __NB:__ must be a constant
+  -> Signal tag (Unsigned n)
+  -- ^ Read address @rd@
+  -> Signal tag a
+  -- ^ The value of the ROM at address @rd@
 romPow2 = rom
 {-# INLINE romPow2 #-}
 
@@ -66,13 +71,16 @@ romPow2 = rom
 -- * See "Clash.Sized.Fixed#creatingdatafiles" and "Clash.Explicit.BlockRam#usingrams"
 -- for ideas on how to use ROMs and RAMs
 rom
-  :: (KnownNat n, Enum addr)
-  => Clock domain gated -- ^ 'Clock' to synchronize to
-  -> Vec n a            -- ^ ROM content
-                        --
-                        -- __NB:__ must be a constant
-  -> Signal domain addr -- ^ Read address @rd@
-  -> Signal domain a
+  :: ( KnownNat n, Enum addr)
+  => Clock tag enabled
+  -- ^ 'Clock' to synchronize to
+  -> Vec n a
+  -- ^ ROM content
+  --
+  -- __NB:__ must be a constant
+  -> Signal tag addr
+  -- ^ Read address @rd@
+  -> Signal tag a
   -- ^ The value of the ROM at address @rd@ from the previous clock cycle
 rom = \clk content rd -> rom# clk content (fromEnum <$> rd)
 {-# INLINE rom #-}
@@ -80,25 +88,29 @@ rom = \clk content rd -> rom# clk content (fromEnum <$> rd)
 -- | ROM primitive
 rom#
   :: KnownNat n
-  => Clock domain gated -- ^ 'Clock' to synchronize to
-  -> Vec n a            -- ^ ROM content
-                        --
-                        -- __NB:__ must be a constant
-  -> Signal domain Int  -- ^ Read address @rd@
-  -> Signal domain a
+  => Clock tag enabled
+  -- ^ 'Clock' to synchronize to
+  -> Vec n a
+  -- ^ ROM content
+  --
+  -- __NB:__ must be a constant
+  -> Signal tag Int
+  -- ^ Read address @rd@
+  -> Signal tag a
   -- ^ The value of the ROM at address @rd@ from the previous clock cycle
 rom# clk content rd = go clk ((arr !) <$> rd)
   where
     szI = length content
     arr = listArray (0,szI-1) (toList content)
 
-    go :: Clock domain gated
-       -> Signal domain a
-       -> Signal domain a
-    go Clock {} =
+    go
+      :: Clock tag enabled
+      -> Signal tag a
+      -> Signal tag a
+    go (RegularClock _) =
       \s -> withFrozenCallStack (errorX "rom: initial value undefined") :- s
 
-    go (GatedClock _ _ en) =
+    go (EnabledClock _ en) =
       go' (withFrozenCallStack (errorX "rom: initial value undefined")) en
 
     go' o (e :- es) as@(~(x :- xs)) =

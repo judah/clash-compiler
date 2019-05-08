@@ -1,6 +1,7 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
                   2017     , Google Inc.
+                  2019     , Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 -}
@@ -48,9 +49,9 @@ import Clash.Signal.Delayed.Internal
    unsafeFromSignal, antiDelay, feedback)
 
 import Clash.Explicit.Signal
-  (Clock, Reset, Signal, register,  bundle, unbundle)
+  (KnownDomain, Clock, Reset, Signal, register,  bundle, unbundle)
 
-import Clash.XException (Undefined)
+import Clash.XException           (Undefined)
 
 {- $setup
 >>> :set -XDataKinds
@@ -59,8 +60,8 @@ import Clash.XException (Undefined)
 >>> let delay3 clk rst = delayed clk rst (-1 :> -1 :> -1 :> Nil)
 >>> let delay2 clk rst = (delayedI clk rst :: Int -> DSignal System n Int -> DSignal System (n + 2) Int)
 >>> :{
-let mac :: Clock System gated
-        -> Reset System synchronous
+let mac :: Clock System enabled
+        -> Reset System polarity
         -> DSignal System 0 Int -> DSignal System 0 Int
         -> DSignal System 0 Int
     mac clk rst x y = feedback (mac' x y)
@@ -79,28 +80,29 @@ let mac :: Clock System gated
 --
 -- @
 -- delay3
---   :: Clock domain gated
---   -> Reset domain synchronous
---   -> 'DSignal' domain n Int
---   -> 'DSignal' domain (n + 3) Int
+--   :: Clock tag enabled
+--   -> Reset tag polarity
+--   -> 'DSignal' tag n Int
+--   -> 'DSignal' tag (n + 3) Int
 -- delay3 clk rst = 'delayed' clk rst (-1 ':>' -1 ':>' -1 ':>' 'Nil')
 -- @
 --
--- >>> sampleN 7 (delay3 systemClockGen asyncResetGen (dfromList [0..]))
+-- >>> sampleN 7 (delay3 systemClockGen resetGen (dfromList [0..]))
 -- [-1,-1,-1,-1,1,2,3]
 delayed
-  :: forall domain gated synchronous a n d
-   . KnownNat d
-  => Undefined a
-  => Clock domain gated
-  -> Reset domain synchronous
+  :: forall tag dom enabled polarity a n d
+   . ( KnownDomain tag dom
+     , KnownNat d
+     , Undefined a )
+  => Clock tag enabled
+  -> Reset tag polarity
   -> Vec d a
   -- ^ Default values
-  -> DSignal domain n a
-  -> DSignal domain (n + d) a
+  -> DSignal tag n a
+  -> DSignal tag (n + d) a
 delayed clk rst m ds = coerce (delaySignal (coerce ds))
   where
-    delaySignal :: Signal domain a -> Signal domain a
+    delaySignal :: Signal tag a -> Signal tag a
     delaySignal s = case length m of
       0 -> s
       _ -> let (r',o) = shiftInAt0 (unbundle r) (singleton s)
@@ -112,34 +114,35 @@ delayed clk rst m ds = coerce (delaySignal (coerce ds))
 --
 -- @
 -- delay2
---   :: Clock domain gated
---   -> Reset domain synchronous
+--   :: Clock tag enabled
+--   -> Reset tag polarity
 --   -> Int
---   -> 'DSignal' domain n Int
---   -> 'DSignal' domain (n + 2) Int
+--   -> 'DSignal' tag n Int
+--   -> 'DSignal' tag (n + 2) Int
 -- delay2 = 'delayedI'
 -- @
 --
--- >>> sampleN 7 (delay2 systemClockGen asyncResetGen (-1) (dfromList ([0..])))
+-- >>> sampleN 7 (delay2 systemClockGen resetGen (-1) (dfromList ([0..])))
 -- [-1,-1,-1,1,2,3,4]
 --
 -- @d@ can also be specified using type application:
 --
 -- >>> :t delayedI @3
 -- delayedI @3
---   :: Undefined a =>
---      Clock domain gated
---      -> Reset domain synchronous
+--   :: ... =>
+--      Clock tag enabled
+--      -> Reset tag polarity
 --      -> a
---      -> DSignal domain n a
---      -> DSignal domain (n + 3) a
+--      -> DSignal tag n a
+--      -> DSignal tag (n + 3) a
 delayedI
-  :: KnownNat d
-  => Undefined a
-  => Clock domain gated
-  -> Reset domain synchronous
+  :: ( KnownNat d
+     , KnownDomain tag dom
+     , Undefined a )
+  => Clock tag enabled
+  -> Reset tag polarity
   -> a
   -- ^ Default value
-  -> DSignal domain n a
-  -> DSignal domain (n + d) a
+  -> DSignal tag n a
+  -> DSignal tag (n + d) a
 delayedI clk rst dflt = delayed clk rst (repeat dflt)

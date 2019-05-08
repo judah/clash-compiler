@@ -1,6 +1,7 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
                   2017     , Google Inc.
+                  2019     , Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -46,17 +47,17 @@ module Clash.Prelude.DataFlow
 where
 
 import GHC.TypeLits           (KnownNat, type (+), type (^))
-import Prelude                hiding ((++), (!!), length, map, repeat, tail, unzip3, zip3
-                              , zipWith)
+import Prelude
+  hiding ((++), (!!), length, map, repeat, tail, unzip3, zip3, zipWith)
 
 import Clash.Class.BitPack    (boolToBV)
 import Clash.Class.Resize     (truncateB)
 import Clash.Prelude.BitIndex (msb)
 import Clash.Explicit.Mealy   (mealyB)
 import Clash.Promoted.Nat     (SNat)
-import Clash.Signal           ((.&&.), unbundle)
+import Clash.Signal           (KnownDomain, (.&&.), unbundle)
 import Clash.Signal.Bundle    (Bundle (..))
-import Clash.Signal.Internal  (clockGate)
+import Clash.Signal.Internal  (toEnabledClock)
 import Clash.Explicit.Signal  (Clock, Reset, Signal, register)
 import Clash.Sized.BitVector  (BitVector)
 import Clash.Sized.Vector
@@ -74,23 +75,23 @@ adhering to the 'DataFlow' type should:
 The 'DataFlow'' type is defined as:
 
 @
-newtype DataFlow' dom iEn oEn i o
+newtype DataFlow' tag iEn oEn i o
   = DF
-  { df :: 'Signal'' dom i     -- Incoming data
-       -> 'Signal'' dom iEn   -- Flagged with /valid/ bits @iEn@.
-       -> 'Signal'' dom oEn   -- Incoming back-pressure, /ready/ edge.
-       -> ( 'Signal'' dom o   -- Outgoing data.
-          , 'Signal'' dom oEn -- Flagged with /valid/ bits @oEn@.
-          , 'Signal'' dom iEn -- Outgoing back-pressure, /ready/ edge.
+  { df :: 'Signal'' tag i     -- Incoming data
+       -> 'Signal'' tag iEn   -- Flagged with /valid/ bits @iEn@.
+       -> 'Signal'' tag oEn   -- Incoming back-pressure, /ready/ edge.
+       -> ( 'Signal'' tag o   -- Outgoing data.
+          , 'Signal'' tag oEn -- Flagged with /valid/ bits @oEn@.
+          , 'Signal'' tag iEn -- Outgoing back-pressure, /ready/ edge.
           )
   }
 @
 
 where:
 
- * @dom@ is the clock to which the circuit is synchronised.
- * @iEn@ is the type of the bidirectional incoming synchronisation channel.
- * @oEn@ is the type of the bidirectional outgoing synchronisation channel.
+ * @tag@ is the domain to which the circuit is synchronized.
+ * @iEn@ is the type of the bidirectional incoming synchronization channel.
+ * @oEn@ is the type of the bidirectional outgoing synchronization channel.
  * @i@ is the incoming data type.
  * @o@ is the outgoing data type.
 
@@ -104,15 +105,15 @@ We define several composition operators for our 'DataFlow' circuits:
 When you look at the types of the above operators it becomes clear why we
 parametrise in the types of the synchronisation channels.
 -}
-newtype DataFlow domain iEn oEn i o
+newtype DataFlow tag iEn oEn i o
   = DF
   { -- | Create an ordinary circuit from a 'DataFlow' circuit
-    df :: Signal domain i     -- Incoming data
-       -> Signal domain iEn   -- Flagged with /valid/ bits @iEn@.
-       -> Signal domain oEn   -- Incoming back-pressure, /ready/ edge.
-       -> ( Signal domain o   -- Outgoing data.
-          , Signal domain oEn -- Flagged with /valid/ bits @oEn@.
-          , Signal domain iEn -- Outgoing back-pressure, /ready/ edge.
+    df :: Signal tag i     -- Incoming data
+       -> Signal tag iEn   -- Flagged with /valid/ bits @iEn@.
+       -> Signal tag oEn   -- Incoming back-pressure, /ready/ edge.
+       -> ( Signal tag o   -- Outgoing data.
+          , Signal tag oEn -- Flagged with /valid/ bits @oEn@.
+          , Signal tag iEn -- Outgoing back-pressure, /ready/ edge.
           )
   }
 
@@ -123,12 +124,12 @@ newtype DataFlow domain iEn oEn i o
 -- type:
 --
 -- @
--- 'Signal'' dom i        -- Incoming data.
--- -> 'Signal'' dom Bool  -- Flagged with a single /valid/ bit.
--- -> 'Signal'' dom Bool  -- Incoming back-pressure, /ready/ bit.
--- -> ( 'Signal'' dom o   -- Outgoing data.
---    , 'Signal'' dom oEn -- Flagged with a single /valid/ bit.
---    , 'Signal'' dom iEn -- Outgoing back-pressure, /ready/ bit.
+-- 'Signal'' tag i        -- Incoming data.
+-- -> 'Signal'' tag Bool  -- Flagged with a single /valid/ bit.
+-- -> 'Signal'' tag Bool  -- Incoming back-pressure, /ready/ bit.
+-- -> ( 'Signal'' tag o   -- Outgoing data.
+--    , 'Signal'' tag oEn -- Flagged with a single /valid/ bit.
+--    , 'Signal'' tag iEn -- Outgoing back-pressure, /ready/ bit.
 --    )
 -- @
 --
@@ -137,49 +138,51 @@ newtype DataFlow domain iEn oEn i o
 --  * Not consume data when validity is deasserted.
 --  * Only update its output when readiness is asserted.
 liftDF
-  :: ( Signal dom i
-    -> Signal dom Bool
-    -> Signal dom Bool
-    -> (Signal dom o, Signal dom Bool, Signal dom Bool))
-  -> DataFlow dom Bool Bool i o
+  :: ( Signal tag i
+    -> Signal tag Bool
+    -> Signal tag Bool
+    -> (Signal tag o, Signal tag Bool, Signal tag Bool))
+  -> DataFlow tag Bool Bool i o
 liftDF = DF
 
 -- | Create a 'DataFlow' circuit where the given function @f@ operates on the
 -- data, and the synchronisation channels are passed unaltered.
 pureDF
   :: (i -> o)
-  -> DataFlow dom Bool Bool i o
+  -> DataFlow tag Bool Bool i o
 pureDF f = DF (\i iV oR -> (fmap f i,iV,oR))
 
 -- | Create a 'DataFlow' circuit from a Mealy machine description as those of
 -- "Clash.Prelude.Mealy"
 mealyDF
-  :: Undefined s
-  => Clock domain gated
-  -> Reset domain synchronous
+  :: ( KnownDomain tag dom
+     , Undefined s )
+  => Clock tag enabled
+  -> Reset tag polarity
   -> (s -> i -> (s,o))
   -> s
-  -> DataFlow domain Bool Bool i o
+  -> DataFlow tag Bool Bool i o
 mealyDF clk rst f iS =
   DF (\i iV oR -> let en     = iV .&&. oR
                       (s',o) = unbundle (f <$> s <*> i)
-                      s      = register (clockGate clk en) rst iS s'
+                      s      = register (toEnabledClock clk en) rst iS s'
                   in  (o,iV,oR))
 
 -- | Create a 'DataFlow' circuit from a Moore machine description as those of
 -- "Clash.Prelude.Moore"
 mooreDF
-  :: Undefined s
-  => Clock domain gated
-  -> Reset domain synchronous
+  :: ( KnownDomain tag dom
+     , Undefined s )
+  => Clock tag enabled
+  -> Reset tag polarity
   -> (s -> i -> s)
   -> (s -> o)
   -> s
-  -> DataFlow domain Bool Bool i o
+  -> DataFlow tag Bool Bool i o
 mooreDF clk rst ft fo iS =
   DF (\i iV oR -> let en  = iV .&&. oR
                       s'  = ft <$> s <*> i
-                      s   = register (clockGate clk en) rst iS s'
+                      s   = register (toEnabledClock clk en) rst iS s'
                       o   = fo <$> s
                   in  (o,iV,oR))
 
@@ -212,18 +215,19 @@ fifoDF_mealy (mem,rptr,wptr) (wdata,winc,rinc) =
 -- fifo4 = 'fifoDF' d4 (2 :> 3 :> Nil)
 -- @
 fifoDF
-  :: forall addrSize m n a domain gated synchronous
-   . ( Undefined a
+  :: forall addrSize m n a tag dom polarity enabled
+   . ( KnownDomain tag dom
+     , Undefined a
      , KnownNat addrSize
      , KnownNat n
      , KnownNat m
      , (m + n) ~ (2 ^ addrSize) )
-  => Clock domain gated
-  -> Reset domain synchronous
+  => Clock tag enabled
+  -> Reset tag polarity
   -> SNat (m + n) -- ^ Depth of the FIFO buffer. Must be a power of two.
   -> Vec m a      -- ^ Initial content. Can be smaller than the size of the
-                  -- FIFO. Empty spaces are initialised with 'undefined'.
-  -> DataFlow domain Bool Bool a a
+                  -- FIFO. Empty spaces are initialized with 'undefined'.
+  -> DataFlow tag Bool Bool a a
 fifoDF clk rst _ iS = DF $ \i iV oR ->
   let initRdPtr      = 0
       initWrPtr      = fromIntegral (length iS)
@@ -235,15 +239,16 @@ fifoDF clk rst _ iS = DF $ \i iV oR ->
 -- | Identity circuit
 --
 -- <<doc/idDF.svg>>
-idDF :: DataFlow dom en en a a
+idDF :: DataFlow tag en en a a
 idDF = DF (\a val rdy -> (a,val,rdy))
 
 -- | Sequential composition of two 'DataFlow' circuits.
 --
 -- <<doc/seqDF.svg>>
-seqDF :: DataFlow dom aEn bEn a b
-      -> DataFlow dom bEn cEn b c
-      -> DataFlow dom aEn cEn a c
+seqDF
+  :: DataFlow tag aEn bEn a b
+  -> DataFlow tag bEn cEn b c
+  -> DataFlow tag aEn cEn a c
 (DF f) `seqDF` (DF g) = DF (\a aVal cRdy -> let (b,bVal,aRdy) = f a aVal bRdy
                                                 (c,cVal,bRdy) = g b bVal cRdy
                                             in  (c,cVal,aRdy))
@@ -252,8 +257,9 @@ seqDF :: DataFlow dom aEn bEn a b
 -- the second halve unchanged.
 --
 -- <<doc/firstDF.svg>>
-firstDF :: DataFlow dom aEn bEn a b
-        -> DataFlow dom (aEn,cEn) (bEn,cEn) (a,c) (b,c)
+firstDF
+  :: DataFlow tag aEn bEn a b
+  -> DataFlow tag (aEn, cEn) (bEn, cEn) (a, c) (b, c)
 firstDF (DF f) = DF (\ac acV bcR -> let (a,c)     = unbundle ac
                                         (aV,cV)   = unbundle acV
                                         (bR,cR)   = unbundle bcR
@@ -267,7 +273,7 @@ firstDF (DF f) = DF (\ac acV bcR -> let (a,c)     = unbundle ac
 -- | Swap the two communication channels.
 --
 -- <<doc/swapDF.svg>>
-swapDF :: DataFlow dom (aEn,bEn) (bEn,aEn) (a,b) (b,a)
+swapDF :: DataFlow tag (aEn, bEn) (bEn, aEn) (a, b) (b, a)
 swapDF = DF (\ab abV baR -> (swap <$> ab, swap <$> abV, swap <$> baR))
   where
     swap ~(a,b) = (b,a)
@@ -276,26 +282,25 @@ swapDF = DF (\ab abV baR -> (swap <$> ab, swap <$> abV, swap <$> baR))
 -- the first halve unchanged.
 --
 -- <<doc/secondDF.svg>>
-secondDF :: DataFlow dom aEn bEn a b
-         -> DataFlow dom (cEn,aEn) (cEn,bEn) (c,a) (c,b)
+secondDF
+  :: DataFlow tag aEn bEn a b
+  -> DataFlow tag (cEn, aEn) (cEn, bEn) (c, a) (c, b)
 secondDF f = swapDF `seqDF` firstDF f `seqDF` swapDF
 
 -- | Compose two 'DataFlow' circuits in parallel.
 --
 -- <<doc/parDF.svg>>
-parDF :: DataFlow dom aEn bEn a b
-      -> DataFlow dom cEn dEn c d
-      -> DataFlow dom (aEn,cEn) (bEn,dEn) (a,c) (b,d)
+parDF
+  :: DataFlow tag aEn bEn a b
+  -> DataFlow tag cEn dEn c d
+  -> DataFlow tag (aEn, cEn) (bEn, dEn) (a, c) (b, d)
 f `parDF` g = firstDF f `seqDF` secondDF g
 
 -- | Compose /n/ 'DataFlow' circuits in parallel.
-parNDF :: KnownNat n
-       => Vec n (DataFlow dom aEn bEn a b)
-       -> DataFlow dom
-                    (Vec n aEn)
-                    (Vec n bEn)
-                    (Vec n a)
-                    (Vec n b)
+parNDF
+  :: KnownNat n
+  => Vec n (DataFlow tag aEn bEn a b)
+  -> DataFlow tag (Vec n aEn) (Vec n bEn) (Vec n a) (Vec n b)
 parNDF fs =
   DF (\as aVs bRs ->
         let as'  = unbundle as
@@ -349,20 +354,21 @@ parNDF fs =
 --
 -- <<doc/loopDF_sync.svg>>
 loopDF
-  :: ( Undefined d
+  :: ( KnownDomain tag dom
+     , Undefined d
      , KnownNat m
      , KnownNat n
      , KnownNat addrSize
      , (m+n) ~ (2^addrSize) )
-  => Clock dom gated
-  -> Reset dom synchronous
+  => Clock tag enabled
+  -> Reset tag polarity
   -> SNat (m + n)
   -- ^ Depth of the FIFO buffer. Must be a power of two
   -> Vec m d
   -- ^ Initial content of the FIFO buffer. Can be smaller than the size of the
-  -- FIFO. Empty spaces are initialised with 'undefined'.
-  -> DataFlow dom (Bool,Bool) (Bool,Bool) (a,d) (b,d)
-  -> DataFlow dom Bool Bool   a           b
+  -- FIFO. Empty spaces are initialized with 'undefined'.
+  -> DataFlow tag (Bool,Bool) (Bool,Bool) (a,d) (b,d)
+  -> DataFlow tag Bool Bool   a           b
 loopDF clk rst sz is (DF f) =
   DF (\a aV bR -> let (bd,bdV,adR) = f ad adV bdR
                       (b,d)        = unbundle bd
@@ -378,8 +384,8 @@ loopDF clk rst sz is (DF f) =
 
 -- | Feed back the second halve of the communication channel. Unlike 'loopDF',
 -- the feedback loop is /not/ buffered.
-loopDF_nobuf :: DataFlow dom (Bool,Bool) (Bool,Bool) (a,d) (b,d)
-             -> DataFlow dom Bool Bool   a           b
+loopDF_nobuf :: DataFlow tag (Bool,Bool) (Bool,Bool) (a,d) (b,d)
+             -> DataFlow tag Bool Bool   a           b
 loopDF_nobuf (DF f) = DF (\a aV bR -> let (bd,bdV,adR) = f ad adV bdR
                                           (b,d)        = unbundle bd
                                           (bV,dV)      = unbundle bdV
@@ -456,7 +462,7 @@ class LockStep a b where
   -- @
   --
   -- Does the right thing.
-  lockStep :: DataFlow dom a Bool b b
+  lockStep :: DataFlow tag a Bool b b
 
   -- | Extend the synchronization granularity from a single 'Bool'ean value.
   --
@@ -522,7 +528,7 @@ class LockStep a b where
   -- @
   --
   -- Does the right thing.
-  stepLock :: DataFlow dom Bool a b b
+  stepLock :: DataFlow tag Bool a b b
 
 instance LockStep Bool c where
   lockStep = idDF

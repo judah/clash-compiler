@@ -40,12 +40,12 @@ import Clash.Explicit.DDR
 -- Reset values are @0@
 iddr
   :: ( HasCallStack
-     , fast ~ 'Dom n pFast
-     , slow ~ 'Dom n (2*pFast)
+     , KnownDomain fast ('Domain fast fPeriod edge reset init)
+     , KnownDomain slow ('Domain slow (2*fPeriod) edge reset init)
      , KnownNat m )
-  => Clock slow gated
+  => Clock slow enabled
   -- ^ clock
-  -> Reset slow synchronous
+  -> Reset slow polarity
   -- ^ reset
   -> Signal fast (BitVector m)
   -- ^ DDR input signal
@@ -59,26 +59,27 @@ iddr clk rst = withFrozenCallStack ddrIn# clk rst 0 0 0
 --
 -- Reset value is @0@
 oddr
-  :: ( slow ~ 'Dom n (2*pFast)
-     , fast ~ 'Dom n pFast
+  :: ( KnownDomain fast ('Domain fast fPeriod edge reset init)
+     , KnownDomain slow ('Domain slow (2*fPeriod) edge reset init)
      , KnownNat m )
-  => Clock slow gated
+  => Clock slow enabled
   -- ^ clock
-  -> Reset slow synchronous
+  -> Reset slow polarity
   -- ^ reset
-  -> Signal slow (BitVector m,BitVector m)
+  -> Signal slow (BitVector m, BitVector m)
   -- ^ normal speed input pairs
   -> Signal fast (BitVector m)
   -- ^ DDR output signal
 oddr clk rst = uncurry (withFrozenCallStack oddr# clk rst) . unbundle
 
-oddr# :: ( slow ~ 'Dom n (2*pFast)
-         , fast ~ 'Dom n pFast
-         , KnownNat m )
-      => Clock slow gated
-      -> Reset slow synchronous
-      -> Signal slow (BitVector m)
-      -> Signal slow (BitVector m)
-      -> Signal fast (BitVector m)
+oddr#
+  :: ( KnownDomain fast ('Domain fast fPeriod edge reset init)
+     , KnownDomain slow ('Domain slow (2*fPeriod) edge reset init)
+     , KnownNat m )
+  => Clock slow enabled
+  -> Reset slow polarity
+  -> Signal slow (BitVector m)
+  -> Signal slow (BitVector m)
+  -> Signal fast (BitVector m)
 oddr# clk rst = ddrOut# clk rst 0
 {-# NOINLINE oddr# #-}

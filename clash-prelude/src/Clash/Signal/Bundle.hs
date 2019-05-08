@@ -1,6 +1,6 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
-                  2017     , Myrtle Software Ltd, Google Inc.
+                  2017-2019, Myrtle Software Ltd, Google Inc.
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -25,12 +25,12 @@ module Clash.Signal.Bundle
   )
 where
 
-import GHC.TypeLits                 (KnownNat)
+import GHC.TypeLits                 (KnownNat, Symbol)
 import Prelude                      hiding (head, map, tail)
 
 import Clash.NamedTypes             ((:::))
 import Clash.Signal.Bundle.Internal (deriveBundleTuples)
-import Clash.Signal.Internal        (Domain, Signal (..))
+import Clash.Signal.Internal        (Signal (..))
 import Clash.Sized.BitVector        (Bit, BitVector)
 import Clash.Sized.Fixed            (Fixed)
 import Clash.Sized.Index            (Index)
@@ -70,41 +70,41 @@ import Clash.Sized.RTree            (RTree, lazyT)
 -- @
 --
 class Bundle a where
-  type Unbundled (domain :: Domain) a = res | res -> domain a
-  type Unbundled domain a = Signal domain a
+  type Unbundled (tag :: Symbol) a = res | res -> tag a
+  type Unbundled tag a = Signal tag a
   -- | Example:
   --
   -- @
-  -- __bundle__ :: ('Signal' domain a, 'Signal' domain b) -> 'Signal' domain (a,b)
+  -- __bundle__ :: ('Signal' tag a, 'Signal' tag b) -> 'Signal' tag (a,b)
   -- @
   --
   -- However:
   --
   -- @
-  -- __bundle__ :: 'Signal' domain 'Clash.Sized.BitVector.Bit' -> 'Signal' domain 'Clash.Sized.BitVector.Bit'
+  -- __bundle__ :: 'Signal' tag 'Clash.Sized.BitVector.Bit' -> 'Signal' tag 'Clash.Sized.BitVector.Bit'
   -- @
-  bundle :: Unbundled domain a -> Signal domain a
+  bundle :: Unbundled tag a -> Signal tag a
 
   {-# INLINE bundle #-}
-  default bundle :: (Signal domain a ~ Unbundled domain a)
-                 => Unbundled domain a -> Signal domain a
+  default bundle :: (Signal tag a ~ Unbundled tag a)
+                 => Unbundled tag a -> Signal tag a
   bundle s = s
   -- | Example:
   --
   -- @
-  -- __unbundle__ :: 'Signal' domain (a,b) -> ('Signal' domain a, 'Signal' domain b)
+  -- __unbundle__ :: 'Signal' tag (a,b) -> ('Signal' tag a, 'Signal' tag b)
   -- @
   --
   -- However:
   --
   -- @
-  -- __unbundle__ :: 'Signal' domain 'Clash.Sized.BitVector.Bit' -> 'Signal' domain 'Clash.Sized.BitVector.Bit'
+  -- __unbundle__ :: 'Signal' tag 'Clash.Sized.BitVector.Bit' -> 'Signal' tag 'Clash.Sized.BitVector.Bit'
   -- @
-  unbundle :: Signal domain a -> Unbundled domain a
+  unbundle :: Signal tag a -> Unbundled tag a
 
   {-# INLINE unbundle #-}
-  default unbundle :: (Unbundled domain a ~ Signal domain a)
-                   => Signal domain a -> Unbundled domain a
+  default unbundle :: (Unbundled tag a ~ Signal tag a)
+                   => Signal tag a -> Unbundled tag a
   unbundle s = s
 
 instance Bundle Bool
@@ -124,8 +124,8 @@ instance Bundle (Unsigned n)
 
 -- | Note that:
 --
--- > bundle   :: () -> Signal domain ()
--- > unbundle :: Signal domain () -> ()
+-- > bundle   :: () -> Signal tag ()
+-- > unbundle :: Signal tag () -> ()
 instance Bundle () where
   type Unbundled t () = t ::: ()
   -- ^ This is just to satisfy the injectivity annotation

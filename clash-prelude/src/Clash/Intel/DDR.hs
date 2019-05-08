@@ -1,5 +1,6 @@
 {-|
 Copyright  :  (C) 2017, Google Inc
+                  2019, Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -7,7 +8,7 @@ DDR primitives for Intel FPGAs using ALTDDIO primitives.
 
 For general information about DDR primitives see "Clash.Explicit.DDR".
 
-Note that a synchronous reset is only available on certain devices,
+Note that a reset is only available on certain devices,
 see ALTDDIO userguide for the specifics:
 https://www.altera.com/content/dam/altera-www/global/en_US/pdfs/literature/ug/ug_altddio.pdf
 -}
@@ -38,8 +39,8 @@ import Clash.Explicit.DDR
 -- Reset values are @0@
 altddioIn
   :: ( HasCallStack
-     , fast ~ 'Dom n pFast
-     , slow ~ 'Dom n (2*pFast)
+     , KnownDomain fast ('Domain fast fPeriod edge reset init)
+     , KnownDomain slow ('Domain slow (2*fPeriod) edge reset init)
      , KnownNat m )
   => SSymbol deviceFamily
   -- ^ The FPGA family
@@ -47,9 +48,9 @@ altddioIn
   -- For example this can be instantiated as follows:
   --
   -- > SSymbol @"Cyclone IV GX"
-  -> Clock slow gated
+  -> Clock slow enabled
   -- ^ clock
-  -> Reset slow synchronous
+  -> Reset slow polarity
   -- ^ reset
   -> Signal fast (BitVector m)
   -- ^ DDR input signal
@@ -63,8 +64,8 @@ altddioIn _devFam clk rst = withFrozenCallStack ddrIn# clk rst 0 0 0
 -- Reset value is @0@
 altddioOut
   :: ( HasCallStack
-     , fast ~ 'Dom n pFast
-     , slow ~ 'Dom n (2*pFast)
+     , KnownDomain fast ('Domain fast fPeriod edge reset init)
+     , KnownDomain slow ('Domain slow (2*fPeriod) edge reset init)
      , KnownNat m )
   => SSymbol deviceFamily
   -- ^ The FPGA family
@@ -72,9 +73,9 @@ altddioOut
   -- For example this can be instantiated as follows:
   --
   -- > SSymbol @"Cyclone IV E"
-  -> Clock slow gated
+  -> Clock slow enabled
   -- ^ clock
-  -> Reset slow synchronous
+  -> Reset slow polarity
   -- ^ reset
   -> Signal slow (BitVector m,BitVector m)
   -- ^ normal speed input pair
@@ -85,12 +86,12 @@ altddioOut devFam clk rst =
 
 altddioOut#
   :: ( HasCallStack
-     , fast ~ 'Dom n pFast
-     , slow ~ 'Dom n (2*pFast)
+     , KnownDomain fast ('Domain fast fPeriod edge reset init)
+     , KnownDomain slow ('Domain slow (2*fPeriod) edge reset init)
      , KnownNat m )
   => SSymbol deviceFamily
-  -> Clock slow gated
-  -> Reset slow synchronous
+  -> Clock slow enabled
+  -> Reset slow polarity
   -> Signal slow (BitVector m)
   -> Signal slow (BitVector m)
   -> Signal fast (BitVector m)

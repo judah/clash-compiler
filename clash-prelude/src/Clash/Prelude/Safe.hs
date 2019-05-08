@@ -1,6 +1,7 @@
 {-|
   Copyright   :  (C) 2013-2016, University of Twente,
-                     2017     , Myrtle Software Ltd, Google Inc.
+                     2017-2019, Myrtle Software Ltd
+                     2017     , Google Inc.
   License     :  BSD2 (see the file LICENSE)
   Maintainer  :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -175,46 +176,48 @@ It instead exports the identically named functions defined in terms of
 
 -- | Create a 'register' function for product-type like signals (e.g. '(Signal a, Signal b)')
 --
--- > rP :: HiddenClockReset domain gated synchronous
--- >    => (Signal domain Int, Signal domain Int)
--- >    -> (Signal domain Int, Signal domain Int)
+-- > rP :: HiddenClockReset tag enabled polarity dom
+-- >    => (Signal tag Int, Signal tag Int)
+-- >    -> (Signal tag Int, Signal tag Int)
 -- > rP = registerB (8,8)
 --
--- >>> simulateB rP [(1,1),(2,2),(3,3)] :: [(Int,Int)]
+-- >>> simulateB @System rP [(1,1),(2,2),(3,3)] :: [(Int,Int)]
 -- [(8,8),(1,1),(2,2),(3,3)...
 -- ...
 registerB
-  :: ( HiddenClockReset domain gated synchronous
+  :: ( HiddenClockReset tag enabled polarity dom
      , Undefined a
      , Bundle a )
   => a
-  -> Unbundled domain a
-  -> Unbundled domain a
+  -> Unbundled tag a
+  -> Unbundled tag a
 registerB = hideClockReset E.registerB
 infixr 3 `registerB`
 {-# INLINE registerB #-}
 
 -- | Give a pulse when the 'Signal' goes from 'minBound' to 'maxBound'
 isRising
-  :: ( HiddenClockReset domain gated synchronous
+  :: ( HiddenClockReset tag enabled polarity dom
      , Undefined a
      , Bounded a
      , Eq a )
-  => a -- ^ Starting value
-  -> Signal domain a
-  -> Signal domain Bool
+  => a
+  -- ^ Starting value
+  -> Signal tag a
+  -> Signal tag Bool
 isRising = hideClockReset E.isRising
 {-# INLINE isRising #-}
 
 -- | Give a pulse when the 'Signal' goes from 'maxBound' to 'minBound'
 isFalling
-  :: ( HiddenClockReset domain gated synchronous
+  :: ( HiddenClockReset tag enabled polarity dom
      , Undefined a
      , Bounded a
      , Eq a )
-  => a -- ^ Starting value
-  -> Signal domain a
-  -> Signal domain Bool
+  => a
+  -- ^ Starting value
+  -> Signal tag a
+  -> Signal tag Bool
 isFalling = hideClockReset E.isFalling
 {-# INLINE isFalling #-}
 
@@ -225,9 +228,9 @@ isFalling = hideClockReset E.isFalling
 -- To be precise: the given signal will be @'False'@ for the next @n-1@ cycles,
 -- followed by a single @'True'@ value:
 --
--- >>> Prelude.last (sampleN 1025 (riseEvery d1024)) == True
+-- >>> Prelude.last (sampleN @System 1025 (riseEvery d1024)) == True
 -- True
--- >>> Prelude.or (sampleN 1024 (riseEvery d1024)) == False
+-- >>> Prelude.or (sampleN @System 1024 (riseEvery d1024)) == False
 -- True
 --
 -- For example, to update a counter once every 10 million cycles:
@@ -236,9 +239,9 @@ isFalling = hideClockReset E.isFalling
 -- counter = 'Clash.Signal.regEn' 0 ('riseEvery' ('SNat' :: 'SNat' 10000000)) (counter + 1)
 -- @
 riseEvery
-  :: HiddenClockReset domain gated synchronous
+  :: HiddenClockReset tag enabled polarity dom
   => SNat n
-  -> Signal domain Bool
+  -> Signal tag Bool
 riseEvery = hideClockReset E.riseEvery
 {-# INLINE riseEvery #-}
 
@@ -249,24 +252,23 @@ riseEvery = hideClockReset E.riseEvery
 --
 -- To oscillate on an interval of 5 cycles:
 --
--- >>> sampleN 11 (oscillate False d5)
+-- >>> sampleN @System 11 (oscillate False d5)
 -- [False,False,False,False,False,False,True,True,True,True,True]
 --
 -- To oscillate between @'True'@ and @'False'@:
 --
--- >>> sampleN 11 (oscillate False d1)
+-- >>> sampleN @System 11 (oscillate False d1)
 -- [False,False,True,False,True,False,True,False,True,False,True]
 --
 -- An alternative definition for the above could be:
 --
 -- >>> let osc' = register False (not <$> osc')
--- >>> let sample' = sampleN 200
--- >>> sample' (oscillate False d1) == sample' osc'
+-- >>> sampleN @System 200 (oscillate False d1) == sampleN @System 200 osc'
 -- True
 oscillate
-  :: HiddenClockReset domain gated synchronous
+  :: HiddenClockReset tag enabled polarity dom
   => Bool
   -> SNat n
-  -> Signal domain Bool
+  -> Signal tag Bool
 oscillate = hideClockReset E.oscillate
 {-# INLINE oscillate #-}

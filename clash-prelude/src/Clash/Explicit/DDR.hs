@@ -1,5 +1,6 @@
 {-|
 Copyright  :  (C) 2017, Google Inc
+                  2019, Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -19,10 +20,12 @@ or "Clash.Xilinx.DDR".
 
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE MagicHash           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE ViewPatterns        #-}
 #if __GLASGOW_HASKELL__ >= 806
 {-# LANGUAGE NoStarIsType #-}
 #endif
@@ -46,19 +49,20 @@ import Clash.Signal.Internal
 --
 -- Consumes a DDR input signal and produces a regular signal containing a pair
 -- of values.
+-- TODO: Check edge/reset/init
 ddrIn
   :: ( HasCallStack
-     , fast ~ 'Dom n pFast
-     , slow ~ 'Dom n (2*pFast))
-  => Clock slow gated
+     , KnownDomain fast ('Domain fast fPeriod edge reset init)
+     , KnownDomain slow ('Domain slow (2*fPeriod) edge reset init) )
+  => Clock slow enabled
   -- ^ clock
-  -> Reset slow synchronous
+  -> Reset slow polarity
   -- ^ reset
   -> (a, a, a)
   -- ^ reset values
   -> Signal fast a
   -- ^ DDR input signal
-  -> Signal slow (a,a)
+  -> Signal slow (a, a)
   -- ^ normal speed output pairs
 ddrIn clk rst (i0,i1,i2) = withFrozenCallStack $ ddrIn# clk rst i0 i1 i2
 
@@ -66,66 +70,92 @@ ddrIn clk rst (i0,i1,i2) = withFrozenCallStack $ ddrIn# clk rst i0 i1 i2
 -- For details about all the seq's en seqX's
 -- see the [Note: register strictness annotations] in Clash.Signal.Internal
 ddrIn#
-  :: forall a slow fast n pFast gated synchronous
+  :: forall a slow fast fPeriod enabled polarity edge reset init
    . ( HasCallStack
-     , fast ~ 'Dom n pFast
-     , slow ~ 'Dom n (2*pFast))
-  => Clock slow gated
-  -> Reset slow synchronous
+     , KnownDomain fast ('Domain fast fPeriod edge reset init)
+     , KnownDomain slow ('Domain slow (2*fPeriod) edge reset init) )
+  => Clock slow enabled
+  -> Reset slow polarity
   -> a
   -> a
   -> a
   -> Signal fast a
   -> Signal slow (a,a)
-ddrIn# (Clock {}) (Sync rst) i0 i1 i2 =
-  go ((errorX "ddrIn: initial value 0 undefined")
-     ,(errorX "ddrIn: initial value 1 undefined")
-     ,(errorX "ddrIn: initial value 2 undefined"))
-     rst
+ddrIn# (RegularClock tag) (toHighPolarity -> hRst) i0 i1 i2 =
+  case knownDomain tag of
+    SDomain _tag _period _edge SSynchronous _init ->
+      goSync
+        ( errorX "ddrIn: initial value 0 undefined"
+        , errorX "ddrIn: initial value 1 undefined"
+        , errorX "ddrIn: initial value 2 undefined" )
+        (fromSyncReset hRst)
+    SDomain _tag _period _edge SAsynchronous _init ->
+      goAsync
+        ( errorX "ddrIn: initial value 0 undefined"
+        , errorX "ddrIn: initial value 1 undefined"
+        , errorX "ddrIn: initial value 2 undefined" )
+        (unsafeFromReset hRst)
   where
-    go :: (a,a,a) -> Signal slow Bool -> Signal fast a -> Signal slow (a,a)
-    go (o0,o1,o2) rt@(~(r :- rs)) as@(~(x0 :- x1 :- xs)) =
-      let (o0',o1',o2') = if r then (i0,i1,i2) else (o2,x0,x1)
-      in o0 `seqX` o1 `seqX` (o0,o1) :- (rt `seq` as `seq` go (o0',o1',o2') rs xs)
-
-ddrIn# (Clock {}) (Async rst) i0 i1 i2 =
-  go ((errorX "ddrIn: initial value 0 undefined")
-     ,(errorX "ddrIn: initial value 1 undefined")
-     ,(errorX "ddrIn: initial value 2 undefined"))
-     rst
-  where
-    go :: (a,a,a) -> Signal slow Bool -> Signal fast a -> Signal slow (a,a)
-    go (o0,o1,o2) ~(r :- rs) as@(~(x0 :- x1 :- xs)) =
+    goAsync
+      :: (a,a,a)
+      -> Signal slow Bool
+      -> Signal fast a
+      -> Signal slow (a,a)
+    goAsync (o0,o1,o2) ~(r :- rs) as@(~(x0 :- x1 :- xs)) =
       let (o0',o1',o2') = if r then (i0,i1,i2) else (o0,o1,o2)
-      in o0' `seqX` o1' `seqX`(o0',o1') :- (as `seq` go (o2',x0,x1) rs xs)
+      in o0' `seqX` o1' `seqX`(o0',o1') :- (as `seq` goAsync (o2',x0,x1) rs xs)
 
-ddrIn# (GatedClock _ _ ena) (Sync rst) i0 i1 i2 =
-  go ((errorX "ddrIn: initial value 0 undefined")
-     ,(errorX "ddrIn: initial value 1 undefined")
-     ,(errorX "ddrIn: initial value 2 undefined"))
-     rst
-     ena
+    goSync
+      :: (a, a, a)
+      -> Signal slow Bool
+      -> Signal fast a
+      -> Signal slow (a,a)
+    goSync (o0,o1,o2) rt@(~(r :- rs)) as@(~(x0 :- x1 :- xs)) =
+      let (o0',o1',o2') = if r then (i0,i1,i2) else (o2,x0,x1)
+      in o0 `seqX` o1 `seqX` (o0,o1) :- (rt `seq` as `seq` goSync (o0',o1',o2') rs xs)
+
+
+ddrIn# (EnabledClock tag ena) (toHighPolarity -> hRst) i0 i1 i2 =
+  case knownDomain tag of
+    SDomain _tag _period _edge SSynchronous _init ->
+      goSync
+        ( errorX "ddrIn: initial value 0 undefined"
+        , errorX "ddrIn: initial value 1 undefined"
+        , errorX "ddrIn: initial value 2 undefined" )
+        (fromSyncReset hRst)
+        ena
+    SDomain _tag _period _edge SAsynchronous _init ->
+      goAsync
+        ( errorX "ddrIn: initial value 0 undefined"
+        , errorX "ddrIn: initial value 1 undefined"
+        , errorX "ddrIn: initial value 2 undefined" )
+        (unsafeFromReset hRst)
+        ena
   where
-    go :: (a,a,a) -> Signal slow Bool -> Signal slow Bool -> Signal fast a -> Signal slow (a,a)
-    go (o0,o1,o2) rt@(~(r :- rs)) ~(e :- es) as@(~(x0 :- x1 :- xs)) =
+    goSync
+      :: (a, a, a)
+      -> Signal slow Bool
+      -> Signal slow Bool
+      -> Signal fast a
+      -> Signal slow (a,a)
+    goSync (o0,o1,o2) rt@(~(r :- rs)) ~(e :- es) as@(~(x0 :- x1 :- xs)) =
       let (o0',o1',o2') = if r then (i0,i1,i2) else (o2,x0,x1)
       in o0 `seqX` o1 `seqX` (o0,o1)
-           :- (rt `seq` as `seq` if e then go (o0',o1',o2') rs es xs
-                                      else go (o0 ,o1 ,o2)    rs es xs)
+           :- (rt `seq` as `seq` if e then goSync (o0',o1',o2') rs es xs
+                                      else goSync (o0 ,o1 ,o2)  rs es xs)
 
-ddrIn# (GatedClock _ _ ena) (Async rst) i0 i1 i2 =
-  go ((errorX "ddrIn: initial value 0 undefined")
-     ,(errorX "ddrIn: initial value 1 undefined")
-     ,(errorX "ddrIn: initial value 2 undefined"))
-     rst
-     ena
-  where
-    go :: (a,a,a) -> Signal slow Bool -> Signal slow Bool -> Signal fast a -> Signal slow (a,a)
-    go (o0,o1,o2) ~(r :- rs) ~(e :- es) as@(~(x0 :- x1 :- xs)) =
+    goAsync
+      :: (a, a, a)
+      -> Signal slow Bool
+      -> Signal slow Bool
+      -> Signal fast a
+      -> Signal slow (a, a)
+    goAsync (o0,o1,o2) ~(r :- rs) ~(e :- es) as@(~(x0 :- x1 :- xs)) =
       let (o0',o1',o2') = if r then (i0,i1,i2) else (o0,o1,o2)
       in o0' `seqX` o1' `seqX` (o0',o1')
-           :- (as `seq` if e then go (o2',x0 ,x1)   rs es xs
-                             else go (o0',o1',o2') rs es xs)
+           :- (as `seq` if e then goAsync (o2',x0 ,x1)   rs es xs
+                             else goAsync (o0',o1',o2') rs es xs)
+
 {-# NOINLINE ddrIn# #-}
 
 -- | DDR output primitive
@@ -134,23 +164,27 @@ ddrIn# (GatedClock _ _ ena) (Async rst) i0 i1 i2 =
 ddrOut
   :: ( HasCallStack
      , Undefined a
-     , fast ~ 'Dom n pFast
-     , slow ~ 'Dom n (2*pFast))
-  => Clock slow gated            -- ^ clock
-  -> Reset slow synchronous      -- ^ reset
-  -> a                           -- ^ reset value
-  -> Signal slow (a,a)           -- ^ normal speed input pairs
-  -> Signal fast a               -- ^ DDR output signal
-ddrOut clk rst i0 = uncurry (withFrozenCallStack $ ddrOut# clk rst i0) . unbundle
+     , KnownDomain fast ('Domain fast fPeriod edge reset init)
+     , KnownDomain slow ('Domain slow (2*fPeriod) edge reset init) )
+  => Clock slow enabled
+  -> Reset slow polarity
+  -> a
+  -- ^ reset value
+  -> Signal slow (a, a)
+  -- ^ Normal speed input pairs
+  -> Signal fast a
+  -- ^ DDR output signal
+ddrOut clk rst i0 =
+  uncurry (withFrozenCallStack $ ddrOut# clk rst i0) . unbundle
 
 
 ddrOut#
   :: ( HasCallStack
      , Undefined a
-     , fast ~ 'Dom n pFast
-     , slow ~ 'Dom n (2*pFast))
-  => Clock slow gated
-  -> Reset slow synchronous
+     , KnownDomain fast ('Domain fast fPeriod edge reset init)
+     , KnownDomain slow ('Domain slow (2*fPeriod) edge reset init) )
+  => Clock slow enabled
+  -> Reset slow polarity
   -> a
   -> Signal slow a
   -> Signal slow a

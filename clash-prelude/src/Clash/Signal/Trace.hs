@@ -1,6 +1,6 @@
 {-|
 Copyright  :  (C) 2018, Google Inc.
-                  2019, Myrtle Software Tld
+                  2019, Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -93,12 +93,14 @@ module Clash.Signal.Trace
   ) where
 
 -- Clash:
-import           Clash.Signal.Internal (Domain (..), fromList)
-import           Clash.Signal          (Signal, bundle, unbundle)
+import           Clash.Signal.Internal (fromList)
+import           Clash.Signal
+  (KnownDomain(..), SDomain(..), Signal, bundle, unbundle)
 import           Clash.Sized.Vector    (Vec, iterateI)
 import qualified Clash.Sized.Vector    as Vector
 import           Clash.Class.BitPack   (BitPack, BitSize, pack, unpack)
 import           Clash.Promoted.Nat    (snatToNum, SNat(..))
+import           Clash.Promoted.Symbol (SSymbol(..))
 import           Clash.Signal.Internal (sample)
 import           Clash.XException      (deepseqX, Undefined)
 import           Clash.Sized.Internal.BitVector
@@ -149,7 +151,7 @@ mkTrace
   => KnownNat (BitSize a)
   => BitPack a
   => Undefined a
-  => Signal domain a
+  => Signal tag a
   -> [Value]
 mkTrace signal = sample (unsafeToTup . pack <$> signal)
  where
@@ -158,7 +160,7 @@ mkTrace signal = sample (unsafeToTup . pack <$> signal)
 -- | Trace a single signal. Will emit an error if a signal with the same name
 -- was previously registered.
 traceSignal#
-  :: forall domain a
+  :: forall tag a
    . ( KnownNat (BitSize a)
      , BitPack a
      , Undefined a
@@ -169,9 +171,9 @@ traceSignal#
   -- ^ The associated clock period for the trace
   -> String
   -- ^ Name of signal in the VCD output
-  -> Signal domain a
+  -> Signal tag a
   -- ^ Signal to trace
-  -> IO (Signal domain a)
+  -> IO (Signal tag a)
 traceSignal# traceMap period traceName signal =
   atomicModifyIORef' traceMap $ \m ->
     if Map.member traceName m then
@@ -193,7 +195,7 @@ traceSignal# traceMap period traceName signal =
 -- a different trace. If the trace name already exists, this function will emit
 -- an error.
 traceVecSignal#
-  :: forall domain n a
+  :: forall tag n a
    . ( KnownNat (BitSize a)
      , KnownNat n
      , BitPack a
@@ -205,9 +207,9 @@ traceVecSignal#
   -- ^ Associated clock period for the trace
   -> String
   -- ^ Name of signal in the VCD output. Will be appended by _0, _1, ..., _n.
-  -> Signal domain (Vec (n+1) a)
+  -> Signal tag (Vec (n+1) a)
   -- ^ Signal to trace
-  -> IO (Signal domain (Vec (n+1) a))
+  -> IO (Signal tag (Vec (n+1) a))
 traceVecSignal# traceMap period vecTraceName (unbundle -> vecSignal) =
   fmap bundle . sequenceA $
     Vector.zipWith trace' (iterateI succ (0 :: Int)) vecSignal
@@ -221,23 +223,24 @@ traceVecSignal# traceMap period vecTraceName (unbundle -> vecSignal) =
 --
 -- __NB__ Works correctly when creating VCD files from traced signal in
 -- multi-clock circuits. However 'traceSignal1' might be more convinient to
--- use when the domain of your circuit is polymorphic.
+-- use when the tag of your circuit is polymorphic.
 traceSignal
-  :: forall domain a name period
-   . ( domain ~ 'Dom name period
-     , KnownNat period
+  :: forall tag dom a
+   . ( KnownDomain tag dom
      , KnownNat (BitSize a)
      , BitPack a
      , Undefined a
      , Typeable a )
   => String
   -- ^ Name of signal in the VCD output
-  -> Signal domain a
+  -> Signal tag a
   -- ^ Signal to trace
-  -> Signal domain a
+  -> Signal tag a
 traceSignal traceName signal =
-  unsafePerformIO $ traceSignal# traceMap# (snatToNum (SNat @ period))
-                      traceName signal
+  case knownDomain (SSymbol @tag) of
+    SDomain _tag period _edge _reset _init ->
+      unsafePerformIO $
+        traceSignal# traceMap# (snatToNum period) traceName signal
 {-# NOINLINE traceSignal #-}
 
 -- | Trace a single signal. Will emit an error if a signal with the same name
@@ -254,9 +257,9 @@ traceSignal1
      , Typeable a )
   => String
   -- ^ Name of signal in the VCD output
-  -> Signal domain a
+  -> Signal tag a
   -- ^ Signal to trace
-  -> Signal domain a
+  -> Signal tag a
 traceSignal1 traceName signal =
   unsafePerformIO (traceSignal# traceMap# 1 traceName signal)
 {-# NOINLINE traceSignal1 #-}
@@ -267,24 +270,25 @@ traceSignal1 traceName signal =
 --
 -- __NB__ Works correctly when creating VCD files from traced signal in
 -- multi-clock circuits. However 'traceSignal1' might be more convinient to
--- use when the domain of your circuit is polymorphic.
+-- use when the tag of your circuit is polymorphic.
 traceVecSignal
-  :: forall domain a name period n
-   . ( domain ~ 'Dom name period
+  :: forall tag a dom n
+   . ( KnownDomain tag dom
      , KnownNat (BitSize a)
-     , KnownNat period
      , KnownNat n
      , BitPack a
      , Undefined a
      , Typeable a )
   => String
   -- ^ Name of signal in debugging output. Will be appended by _0, _1, ..., _n.
-  -> Signal domain (Vec (n+1) a)
+  -> Signal tag (Vec (n+1) a)
   -- ^ Signal to trace
-  -> Signal domain (Vec (n+1) a)
+  -> Signal tag (Vec (n+1) a)
 traceVecSignal traceName signal =
-  unsafePerformIO $ traceVecSignal# traceMap# (snatToNum (SNat @ period))
-                      traceName signal
+  case knownDomain (SSymbol @tag) of
+    SDomain _tag period _edge _reset _init ->
+      unsafePerformIO $
+        traceVecSignal# traceMap# (snatToNum period) traceName signal
 {-# NOINLINE traceVecSignal #-}
 
 -- | Trace a single vector signal: each element in the vector will show up as
@@ -303,9 +307,9 @@ traceVecSignal1
      , Typeable a )
   => String
   -- ^ Name of signal in debugging output. Will be appended by _0, _1, ..., _n.
-  -> Signal domain (Vec (n+1) a)
+  -> Signal tag (Vec (n+1) a)
   -- ^ Signal to trace
-  -> Signal domain (Vec (n+1) a)
+  -> Signal tag (Vec (n+1) a)
 traceVecSignal1 traceName signal =
   unsafePerformIO $ traceVecSignal# traceMap# 1 traceName signal
 {-# NOINLINE traceVecSignal1 #-}
@@ -462,7 +466,7 @@ dumpVCD#
   -- ^ Map with collected traces
   -> (Int, Int)
   -- ^ (offset, number of samples)
-  -> Signal domain a
+  -> Signal tag a
   -- ^ (One of) the output(s) the circuit containing the traces
   -> [String]
   -- ^ The names of the traces you definitely want to be dumped to the VCD file
@@ -492,7 +496,7 @@ dumpVCD
   :: Undefined a
   => (Int, Int)
   -- ^ (offset, number of samples)
-  -> Signal domain a
+  -> Signal tag a
   -- ^ (One of) the outputs of the circuit containing the traces
   -> [String]
   -- ^ The names of the traces you definitely want to be dumped in the VCD file
@@ -501,11 +505,11 @@ dumpVCD = dumpVCD# traceMap#
 
 -- | Dump a number of samples to a replayable bytestring.
 dumpReplayable
-  :: forall a domain
+  :: forall a tag
    . Undefined a
   => Int
   -- ^ Number of samples
-  -> Signal domain a
+  -> Signal tag a
   -- ^ (One of) the outputs of the circuit containing the traces
   -> String
   -- ^ Name of trace to dump
@@ -522,14 +526,14 @@ dumpReplayable n oSignal traceName = do
 -- decoding process and yield an error. Not that this always happens if you
 -- evaluate more values than were originally dumped.
 replay
-  :: forall a domain n
+  :: forall a tag n
    . ( Typeable a
      , Undefined a
      , BitPack a
      , KnownNat n 
      , n ~ BitSize a )
   => ByteString
-  -> Either String (Signal domain a)
+  -> Either String (Signal tag a)
 replay bytes0 = samples1
  where
   samples1 =
@@ -562,7 +566,7 @@ waitForTraces#
   :: Undefined a
   => IORef TraceMap
   -- ^ Map with collected traces
-  -> Signal dom a
+  -> Signal tag a
   -- ^ (One of) the output(s) the circuit containing the traces
   -> [String]
   -- ^ The names of the traces you definitely want to be dumped to the VCD file

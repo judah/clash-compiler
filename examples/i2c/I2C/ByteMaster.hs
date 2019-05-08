@@ -55,8 +55,8 @@ type ByteMasterO = (Bool,Bool,BitVector 8,BitCtrlSig)
                      ]
     }) #-}
 byteMaster
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Unbundled System ByteMasterI
   -> Unbundled System ByteMasterO
 byteMaster = exposeClockReset (mealyB byteMasterT byteMasterInit)

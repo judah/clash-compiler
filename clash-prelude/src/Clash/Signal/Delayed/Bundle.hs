@@ -1,3 +1,10 @@
+{-|
+  Copyright   :  (C) 2019, Myrtle Software Ltd.
+                     2018, @blaxill
+                     2018, QBayLogic B.V.
+  License     :  BSD2 (see the file LICENSE)
+  Maintainer  :  Christiaan Baaij <christiaan.baaij@gmail.com>
+-}
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE DefaultSignatures      #-}
 {-# LANGUAGE FlexibleContexts       #-}
@@ -16,13 +23,12 @@ module Clash.Signal.Delayed.Bundle (
   ) where
 
 import           Control.Applicative           (liftA2)
-import           GHC.TypeLits                  (KnownNat)
+import           GHC.TypeLits                  (KnownNat, Symbol)
 import           Prelude                       hiding (head, map, tail)
 
 import           Clash.Signal.Delayed (DSignal, toSignal, unsafeFromSignal)
 import qualified Clash.Signal.Bundle           as B
 
-import           Clash.Signal.Internal         (Domain)
 import           Clash.Sized.BitVector         (Bit, BitVector)
 import           Clash.Sized.Fixed             (Fixed)
 import           Clash.Sized.Index             (Index)
@@ -58,46 +64,46 @@ import           GHC.TypeLits                  (Nat)
 -- data D = A | B
 --
 -- instance Bundle D where
---   type 'Unbundled'' domain delay D = 'DSignal'' domain d D
+--   type 'Unbundled'' tag delay D = 'DSignal'' tag d D
 --   'bundle'   _ s = s
 --   'unbundle' _ s = s
 -- @
 --
 class Bundle a where
-  type Unbundled (domain :: Domain) (d :: Nat) a = res | res -> domain d a
-  type Unbundled domain d a = DSignal domain d a
+  type Unbundled (tag :: Symbol) (d :: Nat) a = res | res -> tag d a
+  type Unbundled tag d a = DSignal tag d a
 
   -- | Example:
   --
   -- @
-  -- __bundle__ :: ('DSignal' domain d a, 'DSignal' domain d b) -> 'DSignal' clk d (a,b)
+  -- __bundle__ :: ('DSignal' tag d a, 'DSignal' tag d b) -> 'DSignal' clk d (a,b)
   -- @
   --
   -- However:
   --
   -- @
-  -- __bundle__ :: 'DSignal' domain 'Clash.Sized.BitVector.Bit' -> 'DSignal' domain 'Clash.Sized.BitVector.Bit'
+  -- __bundle__ :: 'DSignal' tag 'Clash.Sized.BitVector.Bit' -> 'DSignal' tag 'Clash.Sized.BitVector.Bit'
   -- @
-  bundle :: Unbundled domain d a -> DSignal domain d a
+  bundle :: Unbundled tag d a -> DSignal tag d a
   {-# INLINE bundle #-}
-  default bundle :: (DSignal domain d a ~ Unbundled domain d a)
-                 => Unbundled domain d a -> DSignal domain d a
+  default bundle :: (DSignal tag d a ~ Unbundled tag d a)
+                 => Unbundled tag d a -> DSignal tag d a
   bundle s = s
   -- | Example:
   --
   -- @
-  -- __unbundle__ :: 'DSignal' domain d (a,b) -> ('DSignal' domain d a, 'DSignal' domain d b)
+  -- __unbundle__ :: 'DSignal' tag d (a,b) -> ('DSignal' tag d a, 'DSignal' tag d b)
   -- @
   --
   -- However:
   --
   -- @
-  -- __unbundle__ :: 'DSignal' domain 'Clash.Sized.BitVector.Bit' -> 'DSignal' domain 'Clash.Sized.BitVector.Bit'
+  -- __unbundle__ :: 'DSignal' tag 'Clash.Sized.BitVector.Bit' -> 'DSignal' tag 'Clash.Sized.BitVector.Bit'
   -- @
-  unbundle :: DSignal domain d a -> Unbundled domain d a
+  unbundle :: DSignal tag d a -> Unbundled tag d a
   {-# INLINE unbundle #-}
-  default unbundle :: (Unbundled domain d a ~ DSignal domain d a)
-                   => DSignal domain d a -> Unbundled domain d a
+  default unbundle :: (Unbundled tag d a ~ DSignal tag d a)
+                   => DSignal tag d a -> Unbundled tag d a
   unbundle s = s
 
 instance Bundle Bool
