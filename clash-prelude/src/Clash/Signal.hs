@@ -143,13 +143,13 @@ module Clash.Signal
   , (.&&.), (.||.)
     -- * Product/Signal isomorphism
   , Bundle(..)
-    -- * Simulation functions (not synthesisable)
+    -- * Simulation functions (not synthesizable)
   , simulate
   , simulateB
     -- ** lazy versions
   , simulate_lazy
   , simulateB_lazy
-    -- * List \<-\> Signal conversion (not synthesisable)
+    -- * List \<-\> Signal conversion (not synthesizable)
   , sample
   , sampleN
   , fromList
@@ -854,7 +854,7 @@ simulate_lazy f =
 -- [(8,8),(1,1),(2,2),(3,3)...
 -- ...
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 simulateB
   :: forall tag dom a b
    . ( KnownDomain tag dom

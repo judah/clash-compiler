@@ -232,7 +232,7 @@ uartTX t@(TxReg {..}) ld_tx_data tx_data tx_enable = flip execState t $ do
     tx_cnt .= 0
 
 uartRX r@(RxReg {..}) rx_in uld_rx_data rx_enable = flip execState r $ do
-  -- Synchronise the async signal
+  -- Synchronize the async signal
   rx_d1 .= rx_in
   rx_d2 .= _rx_d1
   -- Uload the rx data

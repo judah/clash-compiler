@@ -5,7 +5,7 @@ Copyright  :  (C) 2013-2016, University of Twente,
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
-Self-synchronising circuits based on data-flow principles.
+Self-synchronizing circuits based on data-flow principles.
 -}
 
 {-# LANGUAGE DataKinds             #-}
@@ -63,7 +63,7 @@ import Clash.Sized.BitVector  (BitVector)
 import Clash.Sized.Vector
 import Clash.XException       (errorX, Undefined)
 
-{- | Dataflow circuit with bidirectional synchronisation channels.
+{- | Dataflow circuit with bidirectional synchronization channels.
 
 In the /forward/ direction we assert /validity/ of the data. In the /backward/
 direction we assert that the circuit is /ready/ to receive new data. A circuit
@@ -103,7 +103,7 @@ We define several composition operators for our 'DataFlow' circuits:
  * 'lockStep' proceed in lock-step.
 
 When you look at the types of the above operators it becomes clear why we
-parametrise in the types of the synchronisation channels.
+parametrize in the types of the synchronization channels.
 -}
 newtype DataFlow tag iEn oEn i o
   = DF
@@ -117,7 +117,7 @@ newtype DataFlow tag iEn oEn i o
           )
   }
 
--- | Dataflow circuit synchronised to the 'systemClockGen'.
+-- | Dataflow circuit synchronized to the 'systemClockGen'.
 -- type DataFlow iEn oEn i o = DataFlow' systemClockGen iEn oEn i o
 
 -- | Create a 'DataFlow' circuit from a circuit description with the appropriate
@@ -146,7 +146,7 @@ liftDF
 liftDF = DF
 
 -- | Create a 'DataFlow' circuit where the given function @f@ operates on the
--- data, and the synchronisation channels are passed unaltered.
+-- data, and the synchronization channels are passed unaltered.
 pureDF
   :: (i -> o)
   -> DataFlow tag Bool Bool i o
