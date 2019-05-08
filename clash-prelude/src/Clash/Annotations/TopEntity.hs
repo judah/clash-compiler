@@ -18,7 +18,7 @@ The 'Synthesize' annotation allows us to:
       (sub)entities that have not changed since the last run. Caching is based
       on a @.manifest@ which is generated alongside the HDL; deleting this file
       means deleting the cache; changing this file will result in /undefined/
-      behaviour.
+      behavior.
 
 Functions with a 'Synthesize' annotation must adhere to the following
 restrictions:

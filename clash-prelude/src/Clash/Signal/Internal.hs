@@ -57,11 +57,11 @@ module Clash.Signal.Internal
   , syncResetGen
     -- * Boolean connectives
   , (.&&.), (.||.)
-    -- * Simulation functions (not synthesisable)
+    -- * Simulation functions (not synthesizable)
   , simulate
     -- ** lazy version
   , simulate_lazy
-    -- * List \<-\> Signal conversion (not synthesisable)
+    -- * List \<-\> Signal conversion (not synthesizable)
   , sample
   , sampleN
   , fromList
@@ -743,7 +743,7 @@ instance CoArbitrary a => CoArbitrary (Signal domain a) where
 testFor :: Foldable f => Int -> f Bool -> Property
 testFor n = property . and . take n . sample
 
--- * List \<-\> Signal conversion (not synthesisable)
+-- * List \<-\> Signal conversion (not synthesizable)
 
 -- | The above type is a generalisation for:
 --
@@ -758,7 +758,7 @@ testFor n = property . and . take n . sample
 --
 -- > sample s == [s0, s1, s2, s3, ...
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 sample :: (Foldable f, Undefined a) => f a -> [a]
 sample = foldr (\a b -> deepseqX a (a : b)) []
 
@@ -775,7 +775,7 @@ sample = foldr (\a b -> deepseqX a (a : b)) []
 --
 -- > sampleN 3 s == [s0, s1, s2]
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 sampleN :: (Foldable f, Undefined a) => Int -> f a -> [a]
 sampleN n = take n . sample
 
@@ -791,7 +791,7 @@ sampleN n = take n . sample
 fromList :: Undefined a => [a] -> Signal domain a
 fromList = Prelude.foldr (\a b -> deepseqX a (a :- b)) (errorX "finite list")
 
--- * Simulation functions (not synthesisable)
+-- * Simulation functions (not synthesizable)
 
 -- | Simulate a (@'Clash.Signal.Signal' a -> 'Clash.Signal.Signal' b@) function
 -- given a list of samples of type @a@
@@ -817,7 +817,7 @@ simulate f = sample . f . fromList
 --
 -- > sample s == [s0, s1, s2, s3, ...
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 sample_lazy :: Foldable f => f a -> [a]
 sample_lazy = foldr (:) []
 
@@ -834,7 +834,7 @@ sample_lazy = foldr (:) []
 --
 -- > sampleN 3 s == [s0, s1, s2]
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 sampleN_lazy :: Foldable f => Int -> f a -> [a]
 sampleN_lazy n = take n . sample_lazy
 
@@ -850,7 +850,7 @@ sampleN_lazy n = take n . sample_lazy
 fromList_lazy :: [a] -> Signal domain a
 fromList_lazy = Prelude.foldr (:-) (error "finite list")
 
--- * Simulation functions (not synthesisable)
+-- * Simulation functions (not synthesizable)
 
 -- | Simulate a (@'Clash.Signal.Signal' a -> 'Clash.Signal.Signal' b@) function
 -- given a list of samples of type @a@

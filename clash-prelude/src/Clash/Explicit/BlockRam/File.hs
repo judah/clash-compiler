@@ -4,9 +4,9 @@ Copyright  :  (C) 2015-2016, University of Twente,
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
-= Initialising a BlockRAM with a data file #usingramfiles#
+= Initializing a BlockRAM with a data file #usingramfiles#
 
-BlockRAM primitives that can be initialised with a data file. The BNF grammar
+BlockRAM primitives that can be initialized with a data file. The BNF grammar
 for this data file is simple:
 
 @
@@ -88,7 +88,7 @@ __>>> L.tail $ sampleN 4 $ g systemClockGen (fromList [3..5])__
 {-# OPTIONS_GHC -fno-cpr-anal #-}
 
 module Clash.Explicit.BlockRam.File
-  ( -- * BlockRAM synchronised to an arbitrary clock
+  ( -- * BlockRAM synchronized to an arbitrary clock
     blockRamFile
   , blockRamFilePow2
     -- * Internal
@@ -241,7 +241,7 @@ blockRamFile# clk _sz file rd wen = case clockEnable clk of
     go' !ram o (re :- res) (r :- rs) (e :- en) (w :- wr) (d :- din) =
       let ram' = upd ram e (fromEnum w) d
           o'   = if re then ram V.! r else o
-      in  o `seqX` o :- go' ram' o' res rs en wr din
+      in  o `seqX` o :- goE ram' o' res rs en wr din
 
     upd ram we waddr d = case maybeIsX we of
       Nothing -> case maybeIsX waddr of
@@ -256,7 +256,7 @@ blockRamFile# clk _sz file rd wen = case clockEnable clk of
     ramI    = V.fromList content
 {-# NOINLINE blockRamFile# #-}
 
--- | __NB:__ Not synthesisable
+-- | __NB:__ Not synthesizable
 initMem :: KnownNat n => FilePath -> IO [BitVector n]
 initMem = fmap (map parseBV . lines) . readFile
   where

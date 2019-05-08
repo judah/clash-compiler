@@ -26,7 +26,7 @@ RAM primitives with a combinational read port.
 {-# OPTIONS_HADDOCK show-extensions #-}
 
 module Clash.Explicit.RAM
-  ( -- * RAM synchronised to an arbitrary clock
+  ( -- * RAM synchronized to an arbitrary clock
     asyncRam
   , asyncRamPow2
     -- * Internal

@@ -20,7 +20,7 @@ module Clash.Signal.Delayed.Internal
     DSignal(..)
   , feedback
   , fromSignal
-    -- * List \<-\> DSignal conversion (not synthesisable)
+    -- * List \<-\> DSignal conversion (not synthesizable)
   , dfromList
     -- ** lazy versions
   , dfromList_lazy

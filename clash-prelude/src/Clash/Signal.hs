@@ -666,7 +666,7 @@ sampleN n s =
 --
 -- > sample s == [s0, s1, s2, s3, ...
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 sample_lazy
   :: forall gated synchronous domain a
    . (HiddenClockReset domain gated synchronous => Signal domain a)
@@ -690,7 +690,7 @@ sample_lazy s =
 --
 -- > sampleN 3 s == [s0, s1, s2]
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 sampleN_lazy
   :: forall gated synchronous domain a
    . Int
@@ -744,7 +744,7 @@ simulate f =
 -- [8,1,2,3...
 -- ...
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 simulate_lazy
   :: forall gated synchronous domain a b
    . (HiddenClockReset domain gated synchronous =>
@@ -797,7 +797,7 @@ simulateB f =
 -- [(8,8),(1,1),(2,2),(3,3)...
 -- ...
 --
--- __NB__: This function is not synthesisable
+-- __NB__: This function is not synthesizable
 simulateB_lazy
   :: forall gated synchronous domain a b
    . (Bundle a, Bundle b)

@@ -6,14 +6,14 @@ Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 We simulate DDR signal by using 'Signal's which have exactly half the period
 (or double the speed) of our normal 'Signal's.
 
-The primives in this module can be used to produce of consume DDR signals.
+The primitives in this module can be used to produce of consume DDR signals.
 
 DDR signals are not meant to be used internally in a design,
 but only to communicate with the outside world.
 
-In some cases hardware specific DDR IN registers can be infered by synthesis tools
-from these generic primitives. But to be sure your design will synthesize to
-dedicated hardware resources use the functions from "Clash.Intel.DDR"
+In some cases hardware specific DDR IN registers can be inferred by synthesis
+tools from these generic primitives. But to be sure your design will synthesize
+to dedicated hardware resources use the functions from "Clash.Intel.DDR"
 or "Clash.Xilinx.DDR".
 -}
 

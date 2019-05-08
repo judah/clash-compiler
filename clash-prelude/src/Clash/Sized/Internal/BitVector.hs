@@ -81,7 +81,7 @@ module Clash.Sized.Internal.BitVector
   , ge#
   , gt#
   , le#
-    -- *** Enum (not synthesisable)
+    -- *** Enum (not synthesizable)
   , enumFrom#
   , enumFromThen#
   , enumFromTo#
@@ -169,7 +169,7 @@ import                qualified Data.List                  as L
 -- * 'Num' instance performs /unsigned/ arithmetic.
 data BitVector (n :: Nat) =
     -- | The constructor, 'BV', and  the field, 'unsafeToInteger', are not
-    -- synthesisable.
+    -- synthesizable.
     BV { unsafeMask      :: !Integer
        , unsafeToInteger :: !Integer
        }
@@ -180,7 +180,7 @@ data BitVector (n :: Nat) =
 -- | Bit
 data Bit =
   -- | The constructor, 'Bit', and  the field, 'unsafeToInteger#', are not
-  -- synthesisable.
+  -- synthesizable.
   Bit { unsafeMask#      :: !Integer
       , unsafeToInteger# :: !Integer
       }
@@ -444,7 +444,7 @@ le# (BV 0 n) (BV 0 m) = n <= m
 le#  bv1 bv2 = undefErrorI "<=" bv1 bv2
 
 -- | The functions: 'enumFrom', 'enumFromThen', 'enumFromTo', and
--- 'enumFromThenTo', are not synthesisable.
+-- 'enumFromThenTo', are not synthesizable.
 instance KnownNat n => Enum (BitVector n) where
   succ           = (+# fromInteger# 0 1)
   pred           = (-# fromInteger# 0 1)
@@ -971,7 +971,7 @@ undefined# =
 -- >>> expected `isLike` checked
 -- False
 --
--- __NB__: Not synthesisable
+-- __NB__: Not synthesizable
 isLike :: BitVector n -> BitVector n -> Bool
 isLike (BV cMask c) (BV eMask e) = e' == c' && e' == c''
   where

@@ -433,7 +433,7 @@ lfsrF seed = 'msb' '<$>' r
 @
 
 We can also build a internal/Galois LFSR which has better timing characteristics.
-We first define a Galois LFSR parametrizable in its filter taps:
+We first define a Galois LFSR parameterizable in its filter taps:
 
 @
 lfsrGP taps regs = 'zipWith' xorM taps (fb '+>>' regs)
@@ -552,7 +552,7 @@ data RxReg
 makeLenses ''RxReg
 
 uartRX r\@(RxReg {..}) rx_in uld_rx_data rx_enable = 'flip' 'execState' r $ do
-  -- Synchronise the async signal
+  -- Synchronize the async signal
   rx_d1 '.=' rx_in
   rx_d2 '.=' _rx_d1
   -- Uload the rx data

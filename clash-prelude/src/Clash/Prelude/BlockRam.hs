@@ -350,7 +350,7 @@ This concludes the short introduction to using 'blockRam'.
 {-# OPTIONS_HADDOCK show-extensions #-}
 
 module Clash.Prelude.BlockRam
-  ( -- * BlockRAM synchronised to the system clock
+  ( -- * BlockRAM synchronized to the system clock
     blockRam
   , blockRamPow2
     -- * Read/Write conflict resolution
