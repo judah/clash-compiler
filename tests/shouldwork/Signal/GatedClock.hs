@@ -1,25 +1,25 @@
-module GatedClock where
+module EnabledClock where
 
 import Clash.Explicit.Prelude
 import Clash.Annotations.SynthesisAttributes
 
 test
-  :: Clock System gated
-  -> Reset System Asynchronous
+  :: Clock System enabled
+  -> Reset System polarity
   -> Signal System (Unsigned 8)
   -> Signal System (Unsigned 8)
 test clkIn rst x = register clk rst 0 x
   where
-    clk = clockGate clkIn clkEn
+    clk = toEnabledClock clkIn clkEn
     clkEn = even <$> x
 
 
-{-# ANN gated (defSyn "gated") #-}
-gated = test @Gated
-{-# NOINLINE gated #-}
+{-# ANN enabled (defSyn "enabled") #-}
+enabled = test @Enabled
+{-# NOINLINE enabled #-}
 
 {-# ANN source (defSyn "source") #-}
-source = test @Source
+source = test @Regular
 {-# NOINLINE source #-}
 
 
@@ -31,10 +31,10 @@ testBench = done
     testInput      = stimuliGenerator clkS rst $(listToVecTH ([1..10] :: [Unsigned 8]))
     expectedOutput = outputVerifier clkS rst $(listToVecTH ([0,0,2,2,4,4,6,6,8,8,10,10] :: [Unsigned 8]))
     testOutput1    = source clkS  rst testInput
-    testOutput2    = gated  clkG rst testInput
+    testOutput2    = enabled  clkG rst testInput
     done1          = expectedOutput testOutput1
     done2          = expectedOutput testOutput2
     done           = done1 .&&. done2
     clkS           = tbSystemClockGen (not <$> done)
-    clkG           = clockGate clkS (pure True)
+    clkG           = toEnabledClock clkS (pure True)
     rst            = systemResetGen

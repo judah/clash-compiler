@@ -5,12 +5,12 @@ import Clash.Explicit.Prelude
 import Clash.Annotations.TopEntity
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> (Signal System (Unsigned 4), Signal System (Unsigned 4), Signal System Bool)
 topEntity clk reset = (cycleCount, countFromReset, newResetSig)
   where
-    newReset :: Reset System Asynchronous
+    newReset :: Reset System polarity
     newReset
       = unsafeToAsyncReset newResetSig
 

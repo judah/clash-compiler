@@ -42,7 +42,7 @@ chosen:
 
 @
 instance KnownDomain "System" ('Domain "System" 10000 'Rising 'Asynchronous 'Defined) where
-  knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
+  knownDomain = SDomain SSymbolSNat SRising SAsynchronous SDefined
 @
 
 In words, "System" is a synthesis domain with a clock running with a period
@@ -88,7 +88,18 @@ module Clash.Signal
   , SResetKind(..)
   , Domain(..)
   , SDomain(..)
+    -- ** Default domains
   , System
+  , XilinxSystem
+  , IntelSystem
+  , vSystem
+  , vIntelSystem
+  , vXilinxSystem
+    -- ** Domain utilities
+  , VDomain(..)
+  , vDomain
+  , createDomain
+  , knownVDomain
     -- * Clock
   , Clock
   , ClockKind (..)
@@ -709,7 +720,7 @@ sample
   -- (and reset)
   -> [a]
 sample s =
-  case knownDomain' @tag of
+  case knownDomain @tag of
     SDomain tag _ _ _ _ ->
       let clk = RegularClock tag in
       let rst = ActiveHighReset @tag (True :- pure False) in
@@ -736,7 +747,7 @@ sampleN
   -- (and reset)
   -> [a]
 sampleN n s =
-  case knownDomain' @tag of
+  case knownDomain @tag of
     SDomain tag _ _ _ _ ->
       let clk = RegularClock tag in
       let rst = ActiveHighReset @tag (True :- pure False) in
@@ -759,7 +770,7 @@ sample_lazy
   -- (and reset)
   -> [a]
 sample_lazy s =
-  case knownDomain' @tag of
+  case knownDomain @tag of
     SDomain tag _ _ _ _ ->
       let clk = RegularClock tag in
       let rst = ActiveHighReset @tag (True :- pure False) in
@@ -783,7 +794,7 @@ sampleN_lazy
   -- (and reset)
   -> [a]
 sampleN_lazy n s =
-  case knownDomain' @tag of
+  case knownDomain @tag of
     SDomain tag _ _ _ _ ->
       let clk = RegularClock tag in
       let rst = ActiveHighReset @tag (True :- pure False) in
@@ -814,7 +825,7 @@ simulate
   -> [a]
   -> [b]
 simulate f =
-  case knownDomain' @tag of
+  case knownDomain @tag of
     SDomain tag _ _ _ _ ->
       let clk = RegularClock tag in
       let rst = ActiveHighReset @tag (True :- pure False) in
@@ -840,7 +851,7 @@ simulate_lazy
   -> [a]
   -> [b]
 simulate_lazy f =
-  case knownDomain' @tag of
+  case knownDomain @tag of
     SDomain tag _ _ _ _ ->
       let clk = RegularClock tag in
       let rst = ActiveHighReset @tag (True :- pure False) in
@@ -869,7 +880,7 @@ simulateB
   -> [a]
   -> [b]
 simulateB f =
-  case knownDomain' @tag of
+  case knownDomain @tag of
     SDomain tag _ _ _ _ ->
       let clk = RegularClock tag in
       let rst = ActiveHighReset @tag (True :- pure False) in
@@ -896,7 +907,7 @@ simulateB_lazy
   -> [a]
   -> [b]
 simulateB_lazy f =
-  case knownDomain' @tag of
+  case knownDomain @tag of
     SDomain tag _ _ _ _ ->
       let clk = RegularClock tag in
       let rst = ActiveHighReset @tag (True :- pure False) in

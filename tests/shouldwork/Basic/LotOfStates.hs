@@ -34,8 +34,8 @@ fsm s i
   | otherwise            = (s,     0)
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System (Unsigned 8)
   -> Signal System (Unsigned 8)
 topEntity = exposeClockReset (mealy fsm S_0)

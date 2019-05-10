@@ -3,11 +3,11 @@
     , "kind" : "Declaration"
     , "type" :
 "romFile# :: KnownNat m      -- ARG[0]
-          => Clock dom gated -- clk,  ARG[1]
+          => Clock tag enabled -- clk,  ARG[1]
           -> SNat n          -- sz,   ARG[2]
           -> FilePath        -- file, ARG[3]
-          -> Signal dom Int  -- rd,   ARG[4]
-          -> Signal dom (BitVector m)"
+          -> Signal tag Int  -- rd,   ARG[4]
+          -> Signal tag (BitVector m)"
     , "template" :
 "-- romFile begin
 ~GENSYM[~COMPNAME_romFile][0] : block
@@ -26,7 +26,7 @@
   end function;
 
   signal ~GENSYM[ROM][2] : ~SYM[4](0 to ~LIT[2]-1) := ~SYM[1](~FILE[~LIT[3]]);
-  signal ~GENSYM[rd][3] : integer range 0 to ~LIT[2]-1;~IF ~ISGATED[1] ~THEN
+  signal ~GENSYM[rd][3] : integer range 0 to ~LIT[2]-1;~IF ~ISENABLED[1] ~THEN
   signal ~GENSYM[clk][5] : std_logic;
   signal ~GENSYM[ce][6] : boolean; ~ELSE ~FI
 begin
@@ -35,7 +35,7 @@ begin
                 mod ~LIT[2]
   -- pragma translate_on
                 ;
-  ~IF ~ISGATED[1] ~THEN
+  ~IF ~ISENABLED[1] ~THEN
   (~SYM[5],~SYM[6]) <= ~ARG[1];
   ~GENSYM[romFileSync][7] : process (~SYM[5])
   begin

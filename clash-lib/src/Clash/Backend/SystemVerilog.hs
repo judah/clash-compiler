@@ -308,7 +308,7 @@ mkUsedTys v@(Vector _ elTy)     = v : mkUsedTys elTy
 mkUsedTys t@(RTree _ elTy)      = t : mkUsedTys elTy
 mkUsedTys p@(Product _ _ elTys) = p : concatMap mkUsedTys elTys
 mkUsedTys sp@(SP _ elTys)       = sp : concatMap mkUsedTys (concatMap snd elTys)
-mkUsedTys c@(Clock _ _ Gated)   = [c,Bit,Bool]
+mkUsedTys c@(Clock _ Enabled)   = [c,Bit,Bool]
 mkUsedTys t                     = [t]
 
 topSortHWTys :: [HWType]
@@ -347,9 +347,9 @@ normaliseType (CustomSP _ _dataRepr size elTys) = do
 normaliseType ty@(Index _) = return (Unsigned (typeSize ty))
 normaliseType ty@(Sum _ _) = return (BitVector (typeSize ty))
 normaliseType ty@(CustomSum _ _ _ _) = return (BitVector (typeSize ty))
-normaliseType ty@(Clock _ _ Gated) =
-  return (gatedClockType ty)
-normaliseType (Clock _ _ Source) = return Bit
+normaliseType ty@(Clock _ Enabled) =
+  return (enabledClockType ty)
+normaliseType (Clock _ Regular) = return Bit
 normaliseType (Reset {}) = return Bit
 normaliseType (BiDirectional dir ty) = BiDirectional dir <$> normaliseType ty
 normaliseType ty = return ty
@@ -406,14 +406,14 @@ tyDec ty@(Product _ _ tys) | typeSize ty > 0 = Just A.<$> prodDec
 
 tyDec _ = pure Nothing
 
-gatedClockType :: HWType -> HWType
-gatedClockType (Clock nm rt Gated) =
+enabledClockType :: HWType -> HWType
+enabledClockType (Clock nm Enabled) =
   Product
-    ("GatedClock" `TextS.append` (TextS.pack (show (nm,rt))))
+    ("EnabledClock" `TextS.append` (TextS.pack (show nm)))
     (Just ["clk", "enable"])
-    [Bit,Bool]
-gatedClockType ty = ty
-{-# INLINE gatedClockType #-}
+    [Bit, Bool]
+enabledClockType ty = ty
+{-# INLINE enabledClockType #-}
 
 splitVecTy :: HWType -> Maybe ([Either Int Int],SystemVerilogM Doc)
 splitVecTy = fmap splitElemTy . go
@@ -639,8 +639,8 @@ verilogType t_ = do
       nm <- Mon $ use modNm
       stringS nm <> "_types::" <> tyName t
     Signed n      -> logicOrWire <+> "signed" <+> brackets (int (n-1) <> colon <> int 0)
-    Clock _ _ Gated -> verilogType (gatedClockType t)
-    Clock _ _ Source-> "logic"
+    Clock _ Enabled -> verilogType (enabledClockType t)
+    Clock _ Regular-> "logic"
     Reset {}      -> "logic"
     Bit           -> "logic"
     Bool          -> "logic"
@@ -698,8 +698,8 @@ tyName t@(Product nm _ _)      = do
              then go mkId s (i+1) n
              else n'
 tyName t@(SP _ _)  = "logic_vector_" <> int (typeSize t)
-tyName t@(Clock _ _ Gated) = tyName (gatedClockType t)
-tyName (Clock _ _ Source)  = "logic"
+tyName t@(Clock _ Enabled) = tyName (enabledClockType t)
+tyName (Clock _ Regular)  = "logic"
 tyName (Reset {})  = "logic"
 tyName t =  error $ $(curLoc) ++ "tyName: " ++ show t
 
@@ -936,7 +936,7 @@ expr_ _ (Identifier id_ (Just (Indexed (ty@(Product _ _ tys),_,fI)))) = do
   id'<- fmap (Text.toStrict . renderOneLine) (stringS id_ <> dot <> tyName ty <> "_sel" <> int fI)
   simpleFromSLV (tys !! fI) id'
 
-expr_ _ (Identifier id_ (Just (Indexed (ty@(Clock _ _ Gated),_,fI)))) = do
+expr_ _ (Identifier id_ (Just (Indexed (ty@(Clock _ Enabled),_,fI)))) = do
   ty' <- normaliseType ty
   stringS =<< fmap (Text.toStrict . renderOneLine) (stringS id_ <> dot <> tyName ty' <> "_sel" <> int fI)
 
@@ -1089,8 +1089,8 @@ expr_ _ (DataCon (CustomSP _ dataRepr size args) (DC (_,i)) es) =
                let rotated  = parens expr' <+> ">>" <+> int end in
                int fsize <> squote <> parens rotated
 expr_ _ (DataCon (Product _ _ tys) _ es) = listBraces (zipWithM toSLV tys es)
-expr_ _ (DataCon (Clock nm rt Gated) _ es) =
-  listBraces (zipWithM toSLV [Clock nm rt Source,Bool] es)
+expr_ _ (DataCon (Clock nm Enabled) _ es) =
+  listBraces (zipWithM toSLV [Clock nm Regular, Bool] es)
 
 expr_ _ (BlackBoxE pNm _ _ _ _ bbCtx _)
   | pNm == "Clash.Sized.Internal.Signed.fromInteger#"

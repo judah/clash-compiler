@@ -5,19 +5,19 @@
 "blockRam#
   :: HasCallStack    --       ARG[0]
   => Undefined a     --       ARG[1]
-  => Clock dom gated -- clk,  ARG[2]
+  => Clock tag enabled -- clk,  ARG[2]
   -> Vec n a         -- init, ARG[3]
-  -> Signal dom Int  -- rd,   ARG[4]
-  -> Signal dom Bool -- wren, ARG[5]
-  -> Signal dom Int  -- wr,   ARG[6]
-  -> Signal dom a    -- din,  ARG[7]
-  -> Signal dom a"
+  -> Signal tag Int  -- rd,   ARG[4]
+  -> Signal tag Bool -- wren, ARG[5]
+  -> Signal tag Int  -- wr,   ARG[6]
+  -> Signal tag a    -- din,  ARG[7]
+  -> Signal tag a"
     , "template" :
 "-- blockRam begin
 ~GENSYM[~RESULT_blockRam][0] : block
   signal ~GENSYM[~RESULT_RAM][1] : ~TYP[3] := ~CONST[3];
   signal ~GENSYM[rd][3]  : integer range 0 to ~LENGTH[~TYP[3]] - 1;
-  signal ~GENSYM[wr][4]  : integer range 0 to ~LENGTH[~TYP[3]] - 1;~IF ~ISGATED[2] ~THEN
+  signal ~GENSYM[wr][4]  : integer range 0 to ~LENGTH[~TYP[3]] - 1;~IF ~ISENABLED[2] ~THEN
   signal ~GENSYM[clk][5] : std_logic;
   signal ~GENSYM[ce][6]  : boolean;~ELSE ~FI
 begin
@@ -32,7 +32,7 @@ begin
                 mod ~LENGTH[~TYP[3]]
   -- pragma translate_on
                 ;
-~IF ~VIVADO ~THEN ~IF ~ISGATED[2] ~THEN
+~IF ~VIVADO ~THEN ~IF ~ISENABLED[2] ~THEN
   (~SYM[5],~SYM[6]) <= ~ARG[2];
   ~GENSYM[blockRam_sync][7] : process(~SYM[5])
   begin
@@ -61,7 +61,7 @@ begin
       -- pragma translate_on
       ;
     end if;
-  end process;~FI ~ELSE ~IF ~ISGATED[2] ~THEN
+  end process;~FI ~ELSE ~IF ~ISENABLED[2] ~THEN
   (~SYM[5],~SYM[6]) <= ~ARG[2];
   ~SYM[7] : process(~SYM[5])
   begin

@@ -5,7 +5,7 @@ import Clash.Explicit.Prelude
 type DomA101 = Dom "A" 101
 
 topEntity
-  :: Clock DomA101 Source
+  :: Clock DomA101 Regular
   -> Reset DomA101 Asynchronous
   -> (Signal DomA101 Integer, Signal DomA101 Integer)
   -> Signal DomA101 Integer

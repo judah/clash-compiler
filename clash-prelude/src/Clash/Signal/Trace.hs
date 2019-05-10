@@ -100,7 +100,6 @@ import           Clash.Sized.Vector    (Vec, iterateI)
 import qualified Clash.Sized.Vector    as Vector
 import           Clash.Class.BitPack   (BitPack, BitSize, pack, unpack)
 import           Clash.Promoted.Nat    (snatToNum, SNat(..))
-import           Clash.Promoted.Symbol (SSymbol(..))
 import           Clash.Signal.Internal (sample)
 import           Clash.XException      (deepseqX, Undefined)
 import           Clash.Sized.Internal.BitVector
@@ -237,7 +236,7 @@ traceSignal
   -- ^ Signal to trace
   -> Signal tag a
 traceSignal traceName signal =
-  case knownDomain (SSymbol @tag) of
+  case knownDomain @tag of
     SDomain _tag period _edge _reset _init ->
       unsafePerformIO $
         traceSignal# traceMap# (snatToNum period) traceName signal
@@ -285,7 +284,7 @@ traceVecSignal
   -- ^ Signal to trace
   -> Signal tag (Vec (n+1) a)
 traceVecSignal traceName signal =
-  case knownDomain (SSymbol @tag) of
+  case knownDomain @tag of
     SDomain _tag period _edge _reset _init ->
       unsafePerformIO $
         traceVecSignal# traceMap# (snatToNum period) traceName signal

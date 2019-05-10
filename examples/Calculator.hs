@@ -35,7 +35,7 @@ datamem mem (addr,Just val) = (replace addr val mem,mem !! addr)
 
 topEntity
   :: Clock  System Regular
-  -> Reset  System polarity
+  -> Reset  System ActiveHigh
   -> Signal System (OPC Word)
   -> Signal System (Maybe Word)
 topEntity = exposeClockReset go where

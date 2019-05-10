@@ -64,7 +64,7 @@ import Clash.Intel.ClockGen
 type Dom50 = Dom \"System\" 20000
 
 topEntity
-  :: Clock Dom50 Source
+  :: Clock Dom50 Regular
   -> Reset Dom50 Asynchronous
   -> Signal Dom50 Bit
   -> Signal Dom50 (BitVector 8)

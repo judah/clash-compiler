@@ -145,8 +145,12 @@ data Element
   -- ^ Record selector of a type
   | IsLit !Int
   | IsVar !Int
-  | IsGated !Int
+  | IsEnabled !Int
   | IsSync !Int
+  | IsActiveHigh !Int
+  | Period !Int
+  | IsRisingEdge !Int
+  | IsInitDefined !Int
   | StrCmp [Element] !Int
   | OutputWireReg !Int
   | Vars !Int

@@ -9,8 +9,8 @@ fir coeffs x = dotp coeffs (window x)
     dotp as bs = sum (zipWith (*) as bs)
 
 topEntity
-  :: Clock  System Source
-  -> Reset  System Asynchronous
+  :: Clock  System Regular
+  -> Reset  System polarity
   -> Signal System (Signed 16)
   -> Signal System (Signed 16)
 topEntity = exposeClockReset (fir (2:>3:>(-2):>8:>0:>Nil))

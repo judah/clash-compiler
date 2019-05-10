@@ -5,8 +5,8 @@
 "unsafeSynchronizer
   :: Clock dom1 g1
   -> Clock dom2 g2
-  -> Signal dom1 a -- ARG[2]
-  -> Signal dom2 a"
+  -> Signal tag1 a -- ARG[2]
+  -> Signal tag2 a"
     , "template"  : "~ARG[2]"
     }
   }

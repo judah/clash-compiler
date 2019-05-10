@@ -8,7 +8,7 @@ import Clash.Explicit.Testbench
 import Data.Word
 
 topEntity
-  :: HiddenClockReset System Source Asynchronous
+  :: HiddenClockReset System Regular Asynchronous
   => Signal System Word8
 topEntity = fmap head r
   where

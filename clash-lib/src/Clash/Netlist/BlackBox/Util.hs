@@ -57,8 +57,9 @@ import           Clash.Netlist.Types             (BlackBoxContext (..),
                                                   Declaration(BlackBoxD))
 import qualified Clash.Netlist.Types             as N
 import           Clash.Netlist.Util              (typeSize)
-import           Clash.Signal.Internal           (ClockKind (Gated),
-                                                  ResetKind (Synchronous))
+import           Clash.Signal.Internal
+  (ClockKind(..), ResetKind(..), ResetPolarity(..), ActiveEdge(..)
+  ,InitBehavior(..))
 import           Clash.Util
 
 inputHole :: Element -> Maybe Int
@@ -330,6 +331,12 @@ renderElem b (SigD e m) = do
   t  <- getMon (hdlSig e' ty)
   return (const (renderOneLine t))
 
+renderElem b (Period n) = do
+  let (_, ty, _) = bbInputs b !! n in
+  case ty of
+    KnownDomain _ period _ _ _ -> Literal Nothing (fromInteger period)
+    _ -> error $ $(curLoc) ++ "Period: Expected KnownDomain, not: " ++ show ty
+
 renderElem b (IF c t f) = do
   iw <- iwWidth
   syn <- hdlSyn
@@ -374,14 +381,41 @@ renderElem b (IF c t f) = do
                       Literal {}   -> 1
                       BlackBoxE {} -> 1
                       _            -> 0
-      (IsGated n) -> let (_,ty,_) = bbInputs b !! n
-                     in case ty of
-                       Clock _ _ Gated -> 1
-                       _               -> 0
-      (IsSync n) -> let (_,ty,_) = bbInputs b !! n
-                    in case ty of
-                       Reset _ _ Synchronous -> 1
-                       _                     -> 0
+      (IsEnabled n) ->
+        let (_, ty, _) = bbInputs b !! n in
+        case ty of
+          Clock _ Enabled -> 1
+          Clock _ Regular -> 0
+          _ -> error $ $(curLoc) ++ "IsEnabled: Expected Clock, not: " ++ show ty
+
+      (IsRisingEdge n) ->
+        let (_, ty, _) = bbInputs b !! n in
+        case ty of
+          KnownDomain _ _ Rising _ _ -> 1
+          KnownDomain _ _ Falling _ _ -> 0
+          _ -> error $ $(curLoc) ++ "IsRisingEdge: Expected KnownDomain, not: " ++ show ty
+
+      (IsSync n) ->
+        let (_, ty, _) = bbInputs b !! n in
+        case ty of
+          KnownDomain _ _ _ Synchronous _ -> 1
+          KnownDomain _ _ _ Asynchronous _ -> 0
+          _ -> error $ $(curLoc) ++ "IsSync: Expected KnownDomain, not: " ++ show ty
+
+      (IsInitDefined n) ->
+        let (_, ty, _) = bbInputs b !! n in
+        case ty of
+          KnownDomain _ _ _ _ Defined -> 1
+          KnownDomain _ _ _ _ Undefined -> 0
+          _ -> error $ $(curLoc) ++ "IsInitDefined: Expected KnownDomain, not: " ++ show ty
+
+      (IsActiveHigh n) ->
+        let (_, ty, _) = bbInputs b !! n in
+        case ty of
+          Reset _ ActiveHigh -> 1
+          Reset _ ActiveLow -> 0
+          _ -> error $ $(curLoc) ++ "IsActiveHigh: Expected Reset, not: " ++ show ty
+
       (StrCmp [Text t1] n) ->
         let (e,_,_) = bbInputs b !! n
         in  case exprToString e of
@@ -737,8 +771,15 @@ prettyElem (Sel e i) = do
   renderOneLine <$> (string "~SEL" <> brackets (string e') <> brackets (int i))
 prettyElem (IsLit i) = renderOneLine <$> (string "~ISLIT" <> brackets (int i))
 prettyElem (IsVar i) = renderOneLine <$> (string "~ISVAR" <> brackets (int i))
-prettyElem (IsGated i) = renderOneLine <$> (string "~ISGATED" <> brackets (int i))
+prettyElem (IsEnabled i) = renderOneLine <$> (string "~ISENABLED" <> brackets (int i))
+prettyElem (IsActiveHigh i) = renderOneLine <$> (string "~ISACTIVEHIGH" <> brackets (int i))
+
+-- Domain attributes:
+prettyElem (Period i) = renderOneLine <$> (string "~PERIOD" <> brackets (int i))
+prettyElem (IsRisingEdge i) = renderOneLine <$> (string "~ISRISINGEDGE" <> brackets (int i))
 prettyElem (IsSync i) = renderOneLine <$> (string "~ISSYNC" <> brackets (int i))
+prettyElem (IsInitDefined i) = renderOneLine <$> (string "~ISINITDEFINED" <> brackets (int i))
+
 prettyElem (StrCmp es i) = do
   es' <- prettyBlackBox es
   renderOneLine <$> (string "~STRCMP" <> brackets (string es') <> brackets (int i))
@@ -831,8 +872,12 @@ walkElement f el = maybeToList (f el) ++ walked
         Sel e _ -> go e
         IsLit _ -> []
         IsVar _ -> []
-        IsGated _ -> []
+        IsEnabled _ -> []
+        Period _ -> []
+        IsRisingEdge _ -> []
         IsSync _ -> []
+        IsInitDefined _ -> []
+        IsActiveHigh _ -> []
         StrCmp es _ -> concatMap go es
         OutputWireReg _ -> []
         Vars _ -> []

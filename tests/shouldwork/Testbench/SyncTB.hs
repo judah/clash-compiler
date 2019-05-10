@@ -8,9 +8,9 @@ type Dom7 = Dom "dom" 7
 type Dom9 = Dom "dom" 9
 
 topEntity
-  :: Clock Dom2 Source
-  -> Clock Dom7 Source
-  -> Clock Dom9 Source
+  :: Clock Dom2 Regular
+  -> Clock Dom7 Regular
+  -> Clock Dom9 Regular
   -> Signal Dom7 Integer
   -> Signal Dom9 Integer
 topEntity clk2 clk7 clk9 i =

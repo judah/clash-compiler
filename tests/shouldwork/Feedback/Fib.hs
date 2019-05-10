@@ -3,12 +3,12 @@ module Fib where
 import Clash.Prelude
 import Clash.Explicit.Testbench
 
-fib :: HiddenClockReset dom gated synchronous => Signal dom (Unsigned 64)
+fib :: HiddenClockReset dom enabled synchronous => Signal tag (Unsigned 64)
 fib = register 1 fib + register 0 (register 0 fib)
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System (Unsigned 64)
 topEntity = exposeClockReset fib
 {-# NOINLINE topEntity #-}

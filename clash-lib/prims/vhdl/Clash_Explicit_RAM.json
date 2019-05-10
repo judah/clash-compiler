@@ -4,8 +4,8 @@
     , "type" :
 "asyncRam#
   :: HasCallStack      -- ARG[0]
-  => Clock wdom wgated -- ^ wclk, ARG[1]
-  -> Clock rdom rgated -- ^ rclk, ARG[2]
+  => Clock wdom wenabled -- ^ wclk, ARG[1]
+  -> Clock rdom renabled -- ^ rclk, ARG[2]
   -> SNat n            -- ^ sz,   ARG[3]
   -> Signal rdom Int   -- ^ rd,   ARG[4]
   -> Signal wdom Bool  -- ^ en,   ARG[5]
@@ -19,7 +19,7 @@
   type ~SYM[4] is array(natural range <>) of ~TYP[7];~FI
   signal ~GENSYM[RAM][1] : ~SYM[4](0 to ~LIT[3]-1);
   signal ~GENSYM[rd][2] : integer range 0 to ~LIT[3] - 1;
-  signal ~GENSYM[wr][3] : integer range 0 to ~LIT[3] - 1;~IF ~ISGATED[1] ~THEN
+  signal ~GENSYM[wr][3] : integer range 0 to ~LIT[3] - 1;~IF ~ISENABLED[1] ~THEN
   signal ~GENSYM[clk][5] : std_logic;
   signal ~GENSYM[ce][6] : boolean;~ELSE ~FI
 begin
@@ -34,7 +34,7 @@ begin
                 mod ~LIT[3]
   -- pragma translate_on
                 ;
-  ~IF ~ISGATED[1] ~THEN
+  ~IF ~ISENABLED[1] ~THEN
   (~SYM[5],~SYM[6]) <= ~ARG[1];
   ~GENSYM[asyncRam_sync][7] : process(~SYM[5])
   begin

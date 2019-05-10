@@ -5,15 +5,15 @@ import Clash.Explicit.Testbench
 import qualified Clash.Explicit.Prelude as Explicit
 
 zeroAt0
-  :: HiddenClockReset domain gated synchronous
-  => Signal domain (Unsigned 8) -> Signal domain (Unsigned 8)
+  :: HiddenClockReset tag enabled polarity dom
+  => Signal tag (Unsigned 8) -> Signal tag (Unsigned 8)
 zeroAt0 a = mux en a 0
   where
     en = register False (pure True)
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System (Unsigned 8) -> Signal System (Unsigned 8)
 topEntity = exposeClockReset go where
   go rd = zeroAt0 (unpack <$> dout) where

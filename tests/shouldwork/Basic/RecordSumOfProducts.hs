@@ -15,8 +15,8 @@ data DbS = DbS { dbS :: DbState }
 
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System Bit -> Signal System Bit
 topEntity = exposeClockReset (walkState <^> DbS (DbInitDisp 0))
 

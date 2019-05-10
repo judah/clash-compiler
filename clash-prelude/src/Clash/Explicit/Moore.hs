@@ -45,7 +45,7 @@ import           Clash.XException                 (Undefined)
 -- macT s (x,y) = x * y + s
 --
 -- mac
---   :: 'Clock' mac Source
+--   :: 'Clock' mac Regular
 --   -> 'Reset' mac Asynchronous
 --   -> 'Signal' mac (Int, Int)
 --   -> 'Signal' mac Int

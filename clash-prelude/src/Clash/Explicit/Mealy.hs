@@ -53,7 +53,7 @@ let macT s (x,y) = (s',s)
 --     s' = x * y + s
 --
 -- mac
---   :: 'Clock' domain Source
+--   :: 'Clock' domain Regular
 --   -> 'Reset' domain Asynchronous
 --   -> 'Signal' tag (Int, Int)
 --   -> 'Signal' tag Int

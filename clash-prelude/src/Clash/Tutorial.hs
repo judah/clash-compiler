@@ -260,7 +260,7 @@ The Clash compiler and Prelude library for circuit design only work with the
               * Windows: @%appdata%\\cabal\\bin@
               * Unix: @\$HOME\/.cabal\/bin@
 
-      * Source:
+      * Regular:
 
           * Download the sources for <http://hackage.haskell.org/package/cabal-install cabal-install>
           * Unpack (@tar xf@) the archive and @cd@ to the directory
@@ -1176,7 +1176,7 @@ And for which the /declaration/ primitive is:
   signal ~GENSYM[~RESULT_q][2] : std_logic_vector(~SIZE[~TYP[6]]-1 downto 0);~ELSE
   signal ~SYM[2] : ~TYP[6];~FI
   signal ~GENSYM[rd][3] : integer range 0 to ~LENGTH[~TYP[2]] - 1;
-  signal ~GENSYM[wr][4] : integer range 0 to ~LENGTH[~TYP[2]] - 1;~IF ~ISGATED[1] ~THEN
+  signal ~GENSYM[wr][4] : integer range 0 to ~LENGTH[~TYP[2]] - 1;~IF ~ISENABLED[1] ~THEN
   signal ~GENSYM[clk][5] : std_logic;
   signal ~GENSYM[ce][6] : std_logic;~ELSE ~FI
 begin
@@ -1190,7 +1190,7 @@ begin
                 mod ~LENGTH[~TYP[2]]
   -- pragma translate_on
                 ;
-  ~IF ~ISGATED[1] ~THEN
+  ~IF ~ISENABLED[1] ~THEN
   (~SYM[5],~SYM[6]) <= ~ARG[1];
   ~GENSYM[blockRam_sync][7] : process(~SYM[5])
   begin
@@ -1267,7 +1267,7 @@ a general listing of the available template holes:
 * @~IF \<CONDITION\> ~THEN \<THEN\> ~ELSE \<ELSE\> ~FI@: renders the \<ELSE\>
   part when \<CONDITION\> evaluates to /0/, and renders the \<THEN\> in all
   other cases. Valid @\<CONDITION\>@s are @~LENGTH[\<HOLE\>]@, @~SIZE[\<HOLE\>]@,
-  @~DEPTH[\<HOLE\>]@, @~VIVADO@, @~IW64@, @~ISLIT[N]@, @~ISVAR[N], @~ISGATED[N]@,
+  @~DEPTH[\<HOLE\>]@, @~VIVADO@, @~IW64@, @~ISLIT[N]@, @~ISVAR[N], @~ISENABLED[N]@,
   @~ISSYNC[N]@, and @~AND[\<HOLE1\>,\<HOLE2\>,..]@.
 * @~VIVADO@: /1/ when Clash compiler is invoked with the @-fclash-xilinx@ or
   @-fclash-vivado@ flag. To be used with in an @~IF .. ~THEN .. ~ElSE .. ~FI@
@@ -1290,7 +1290,7 @@ a general listing of the available template holes:
 * @~ISLIT[N]@: Is the @(N+1)@'th argument to the function a literal.
 * @~ISVAR[N]@: Is the @(N+1)@'th argument to the function explicitly not a
   literal
-* @~ISGATED[N]@: Is the @(N+1)@'th argument a enabled clock, errors when called on
+* @~ISENABLED[N]@: Is the @(N+1)@'th argument a enabled clock, errors when called on
   an argument which is not a 'Clock'.
 * @~ISSYNC[N]@: Is the @(N+1)@'th argument a synchronous reset, errors when
   called on an argument which is not a 'Reset'.
@@ -1358,7 +1358,7 @@ initial begin
     ~SYM[0][~LENGTH[~TYP[2]]-1-~SYM[3]] = ~SYM[2][~SYM[3]*~SIZE[~TYPO]+:~SIZE[~TYPO]];
   end
 end
-~IF ~ISGATED[1] ~THEN
+~IF ~ISENABLED[1] ~THEN
 always @(posedge ~ARG[1][1]) begin : ~GENSYM[~COMPNAME_blockRam][4]~IF ~VIVADO ~THEN
   if (~ARG[1][0]) begin
     if (~ARG[4]) begin
@@ -1421,7 +1421,7 @@ and
 logic [~SIZE[~TYP[6]]-1:0] ~GENSYM[~RESULT_q][1];
 initial begin
   ~SYM[0] = ~LIT[2];
-end~IF ~ISGATED[1] ~THEN
+end~IF ~ISENABLED[1] ~THEN
 always @(posedge ~ARG[1][1]) begin : ~GENSYM[~COMPNAME_blockRam][2]~IF ~VIVADO ~THEN
   if (~ARG[1][0]) begin
     if (~ARG[4]) begin
@@ -1547,9 +1547,9 @@ synchronous logic. As a consequence, we see in the type signature of
 @
 __asyncRam__
   :: (Enum addr, HasCallStack)
-  => 'Clock' wdom wgated
+  => 'Clock' wdom wenabled
    -- ^ Clock to which to synchronize the write port of the RAM
-  -> 'Clock' rdom rgated
+  -> 'Clock' rdom renabled
    -- ^ Clock to which the read address signal, __r__, is synchronized
   -> SNat n
   -- ^ Size __n__ of the RAM
@@ -1650,9 +1650,9 @@ asyncFIFOSynchronizer
   => SNat addrSize
   -- ^ Size of the internally used addresses, the  FIFO contains @2^addrSize@
   -- elements.
-  -> 'Clock' wdomain wgated
+  -> 'Clock' wdomain wenabled
   -- ^ Clock to which the write port is synchronized
-  -> 'Clock' rdomain rgated
+  -> 'Clock' rdomain renabled
   -- ^ Clock to which the read port is synchronized
   -> 'Reset' wdomain polarity
   -> 'Reset' rdomain polarity
@@ -1737,9 +1737,9 @@ asyncFIFOSynchronizer
   => SNat addrSize
   -- ^ Size of the internally used addresses, the  FIFO contains @2^addrSize@
   -- elements.
-  -> 'Clock' wdomain wgated
+  -> 'Clock' wdomain wenabled
   -- ^ Clock to which the write port is synchronized
-  -> 'Clock' rdomain rgated
+  -> 'Clock' rdomain renabled
   -- ^ Clock to which the read port is synchronized
   -> 'Reset' wdomain polarity
   -> 'Reset' rdomain polarity
@@ -1784,10 +1784,10 @@ We can then create the clock and reset domains:
 
 @
 instance KnownDomain "ADC" ('Domain "ADC" 10000 'Rising 'Asynchronous 'Defined) where
-  knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
+  knownDomain = SDomain SSymbolSNat SRising SAsynchronous SDefined
   
 instance KnownDomain "FFT" ('Domain "FFT" 10000 'Rising 'Asynchronous 'Defined) where
-  knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
+  knownDomain = SDomain SSymbolSNat SRising SAsynchronous SDefined
 @
 
 and subsequently a 256-space FIFO synchronizer that safely bridges the ADC clock
@@ -1795,8 +1795,8 @@ domain and to the FFT clock domain:
 
 @
 adcToFFT
-  :: Clock "DomADC" wgated
-  -> Clock "DomFFT" rgated
+  :: Clock "DomADC" wenabled
+  -> Clock "DomFFT" renabled
   -> Reset "DomADC" polarity
   -> Reset "DomFFT" polarity
   -> Signal "DomFFT" Bool

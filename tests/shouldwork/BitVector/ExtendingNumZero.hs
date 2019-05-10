@@ -4,8 +4,8 @@ import Clash.Prelude
 import Clash.Explicit.Testbench
 
 topEntity
-  :: Clock  System Source
-  -> Reset  System Asynchronous
+  :: Clock  System Regular
+  -> Reset  System polarity
   -> Signal System (BitVector 16)
   -> Signal System ( BitVector 17
                    , BitVector 17

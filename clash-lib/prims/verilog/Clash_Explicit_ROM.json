@@ -3,10 +3,10 @@
     , "kind" : "Declaration"
     , "type" :
 "rom# :: KnownNat n      -- ARG[0]
-      => Clock dom gated -- clk,  ARG[1]
+      => Clock tag enabled -- clk,  ARG[1]
       -> Vec n a         -- init, ARG[2]
-      -> Signal dom Int  -- rd,   ARG[3]
-      -> Signal dom a"
+      -> Signal tag Int  -- rd,   ARG[3]
+      -> Signal tag a"
     , "outputReg" : true
     , "template" :
 "// rom begin
@@ -20,7 +20,7 @@ initial begin
     ~SYM[0][~LIT[0]-1-~SYM[3]] = ~SYM[2][~SYM[3]*~SIZE[~TYPO]+:~SIZE[~TYPO]];
   end
 end
-~IF ~ISGATED[1] ~THEN
+~IF ~ISENABLED[1] ~THEN
 always @(posedge ~ARG[1][1]) begin : ~GENSYM[~COMPNAME_rom][4]
   if (~ARG[1][0]) begin
     ~RESULT <= ~SYM[0][~ARG[3]];

@@ -40,10 +40,8 @@ import Clash.Signal.Internal
 -- altpll @@"50MHzDom" @@"100MHzDom" (SSymbol @@"altpll50to100") clk50 rst
 -- @
 altpll
-  :: forall tagIn tagOut periodIn periodOut edge init name
-   . ( KnownDomain tagIn ('Domain tagIn periodIn edge 'Asynchronous init)
-     , KnownDomain tagOut ('Domain tagOut periodOut edge 'Asynchronous init) )
-  => SSymbol name
+  :: forall tagOut tagIn name
+   . SSymbol name
   -- ^ Name of the component, must correspond to the name entered in the QSys
   -- dialog.
   --

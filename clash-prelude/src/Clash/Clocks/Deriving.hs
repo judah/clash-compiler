@@ -20,7 +20,7 @@ import Unsafe.Coerce               (unsafeCoerce)
 -- Derive instance for /n/ clocks
 derive' :: Int -> Q Dec
 derive' n = do
-  -- (Clock d0 'Source, Clock d1 Source', )
+  -- (Clock d0 'Regular, Clock d1 Regular', )
   instType  <- foldM (\a n' -> AppT a <$> clkType n') (TupleT $ n + 1) [1..n]
   instType' <- (AppT (ConT $ mkName "Clocks") . AppT instType) <$> lockType
 
@@ -39,7 +39,7 @@ derive' n = do
   return $ InstanceD Nothing [] instType' [instFunc, noInline]
 
   where
-    -- | Generate type @Clock dom 'Source@ with fresh @dom@ variable
+    -- | Generate type @Clock dom 'Regular@ with fresh @dom@ variable
     clkType n' =
       let c = varT $ mkName ("c" ++ show n') in
       [t| Clock $c 'Regular |]

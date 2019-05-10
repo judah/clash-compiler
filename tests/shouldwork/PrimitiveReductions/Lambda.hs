@@ -20,7 +20,7 @@ myConstant b = g b (map (+1) (repeat 3))
 {-# NOINLINE myConstant #-}
 
 topEntity
-  :: HiddenClockReset System Source Asynchronous
+  :: HiddenClockReset System Regular Asynchronous
   => Signal System (Vec VecSize Int)
   -> Signal System (Vec VecSize Int)
 topEntity = register (myConstant True)

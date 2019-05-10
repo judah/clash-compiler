@@ -62,7 +62,8 @@ import           Clash.Netlist.BlackBox.Util
 import           Clash.Netlist.Id                     (IdType (..), mkBasicId')
 import           Clash.Netlist.Types                  hiding (_intWidth, intWidth)
 import           Clash.Netlist.Util                   hiding (mkIdentifier)
-import           Clash.Signal.Internal                (ClockKind (..), ResetKind (..))
+import           Clash.Signal.Internal
+  (ClockKind(..), ResetPolarity(..))
 import           Clash.Util
   (SrcSpan, noSrcSpan, clogBase, curLoc, first, makeCached, on, traceIf, (<:>))
 import           Clash.Util.Graph                     (reverseTopSort)
@@ -395,7 +396,7 @@ mkUsedTys hwty = hwty : case hwty of
   CustomSP _ _ _ tys0 ->
     let tys1 = concat [tys | (_repr, _id, tys) <- tys0] in
     concatMap mkUsedTys tys1
-  Clock _ _ Gated      -> mkUsedTys (normaliseType hwty)
+  Clock _ Enabled      -> mkUsedTys (normaliseType hwty)
   _ ->
     []
 
@@ -445,7 +446,7 @@ topSortHWTys hwtys = sorted
       let tys2 = [HashMap.lookup (mkVecZ ty) nodesI | ty <- tys1] in
       map (nodesI HashMap.! t,) (catMaybes tys2)
 
-    edge c@(Clock _ _ Gated) =
+    edge c@(Clock _ Enabled) =
       [(nodesI HashMap.! c, nodesI HashMap.! normaliseType c)]
 
     edge _ = []
@@ -504,8 +505,8 @@ tyDec hwty = do
       "end record" <> semi
 
     -- Type aliases:
-    Clock _ _ _       -> typAliasDec hwty
-    Reset _ _ _       -> typAliasDec hwty
+    Clock _ _       -> typAliasDec hwty
+    Reset _ _       -> typAliasDec hwty
     Index _           -> typAliasDec hwty
     CustomSP _ _ _ _  -> typAliasDec hwty
     SP _ _            -> typAliasDec hwty
@@ -1014,8 +1015,10 @@ tyName'
 tyName' rec0 (filterTransparent -> t) = do
   Mon (tyCache %= HashSet.insert t)
   case t of
+    KnownDomain {} ->
+      return (error ($(curLoc) ++ "Forced to print KnownDomain tyName"))
     Void _ ->
-      return (error ($(curLoc) ++ "[CLASH BUG] Forced to print Void tyName"))
+      return (error ($(curLoc) ++ "Forced to print Void tyName"))
     Bool          -> return "boolean"
     Signed n      ->
       let app = if rec0 then ["_", showt n] else [] in
@@ -1044,13 +1047,13 @@ tyName' rec0 (filterTransparent -> t) = do
     -- TODO: nice formatting for Index. I.e., 2000 = 2e3, 1024 = 2pow10
     Index n ->
       return ("index_" `TextS.append` showt n)
-    Clock nm0 _ Gated ->
-      let nm1 = "clk_gated_" `TextS.append` nm0 in
-      Mon $ makeCached (t, False) nameCache (userTyName "clk_gated" nm1 t)
-    Clock nm0 _ Source ->
+    Clock nm0 Enabled ->
+      let nm1 = "clk_enabled_" `TextS.append` nm0 in
+      Mon $ makeCached (t, False) nameCache (userTyName "clk_enabled" nm1 t)
+    Clock nm0 Regular ->
       let nm1 = "clk_" `TextS.append` nm0 in
       Mon $ makeCached (t, False) nameCache (userTyName "clk" nm1 t)
-    Reset nm0 _ _ ->
+    Reset nm0 _ ->
       let nm1 = "rst_" `TextS.append` nm0 in
       Mon $ makeCached (t, False) nameCache (userTyName "rst" nm1 t)
     Sum nm _  ->
@@ -1073,6 +1076,7 @@ tyName' rec0 (filterTransparent -> t) = do
 normaliseType :: HWType -> HWType
 normaliseType hwty = case hwty of
   Void {} -> hwty
+  KnownDomain {} -> hwty
 
   -- Base types:
   Bool          -> hwty
@@ -1088,13 +1092,13 @@ normaliseType hwty = case hwty of
   RTree _ _     -> hwty
   Product _ _ _ -> hwty
 
-  -- Special case for gated clock, which is converted to a tuple:
-  Clock nm _ Gated  ->
-    normaliseType (Product ("GatedClock_" `TextS.append` nm) (Just ["clk", "enable"]) [Bit, Bool])
+  -- Special case for enabled clock, which is converted to a tuple:
+  Clock nm Enabled  ->
+    normaliseType (Product ("EnabledClock_" `TextS.append` nm) (Just ["clk", "enable"]) [Bit, Bool])
 
   -- Simple types, for which a subtype (without qualifiers) will be made in VHDL:
-  Clock _ _ Source  -> Bit
-  Reset _ _ _       -> Bit
+  Clock _ Regular  -> Bit
+  Reset _ _       -> Bit
   Index _           -> Unsigned (typeSize hwty)
   CustomSP _ _ _ _  -> BitVector (typeSize hwty)
   SP _ _            -> BitVector (typeSize hwty)
@@ -1115,8 +1119,8 @@ filterTransparent hwty = case hwty of
   String            -> hwty
   Integer           -> hwty
   Bit               -> hwty
-  Clock _ _ _       -> hwty
-  Reset _ _ _       -> hwty
+  Clock _ _         -> hwty
+  Reset _ _         -> hwty
   Index _           -> hwty
   Sum _ _           -> hwty
   CustomSum _ _ _ _ -> hwty
@@ -1139,6 +1143,7 @@ filterTransparent hwty = case hwty of
   BiDirectional _ elTy -> elTy
 
   Void {} -> hwty
+  KnownDomain {} -> hwty
 
 -- | Create a unique type name for user defined types
 userTyName
@@ -1185,8 +1190,8 @@ sizedQualTyNameErrValue t@(RTree n elTy)    = do
 sizedQualTyNameErrValue t@(Product _ _ elTys) =
   qualTyName t <> "'" <> tupled (mapM sizedQualTyNameErrValue elTys)
 sizedQualTyNameErrValue (Reset {})          = "'-'"
-sizedQualTyNameErrValue (Clock _ _ Source)  = "'-'"
-sizedQualTyNameErrValue (Clock _ _ Gated)   = "('-',false)"
+sizedQualTyNameErrValue (Clock _ Regular)  = "'-'"
+sizedQualTyNameErrValue (Clock _ Enabled)   = "('-',false)"
 sizedQualTyNameErrValue (Void {})           =
   return (error ($(curLoc) ++ "[CLASH BUG] Forced to print Void error value"))
 sizedQualTyNameErrValue String              = "\"ERROR\""
@@ -1396,7 +1401,7 @@ expr_ _ (Identifier id_ (Just (Indexed (ty@(SP _ args),dcI,fI)))) =
 expr_ _ (Identifier id_ (Just (Indexed (ty@(Product _ labels tys),_,fI)))) =
   pretty id_ <> dot <> tyName ty <> selectProductField labels tys fI
 
-expr_ p (Identifier id_ (Just (Indexed (ty@(Clock _ _ Gated),x,fI)))) = do
+expr_ p (Identifier id_ (Just (Indexed (ty@(Clock _ Enabled),x,fI)))) = do
   expr_ p (Identifier id_ (Just (Indexed (normaliseType ty,x,fI))))
 
 expr_ _ (Identifier id_ (Just (Indexed ((Vector _ elTy),1,0)))) = do
@@ -1631,7 +1636,7 @@ expr_ _ (DataCon (CustomSP _ dataRepr size args) (DC (_,i)) es) =
 expr_ _ (DataCon ty@(Product _ labels tys) _ es) =
     tupled $ zipWithM (\i e' -> tyName ty <> selectProductField labels tys i <+> rarrow <+> expr_ False e') [0..] es
 
-expr_ p (DataCon ty@(Clock _ _ Gated) x es) = do
+expr_ p (DataCon ty@(Clock _ Enabled) x es) = do
   expr_ p (DataCon (normaliseType ty) x es)
 
 expr_ _ (BlackBoxE pNm _ _ _ _ bbCtx _)
@@ -1947,11 +1952,11 @@ punctuate' :: Monad m => Mon m Doc -> Mon m [Doc] -> Mon m Doc
 punctuate' s d = vcat (punctuate s d) <> s
 
 encodingNote :: HWType -> VHDLM Doc
-encodingNote (Clock _ _ Gated)        = "-- gated clock" <> line
-encodingNote (Clock _ _ Source)       = "-- clock" <> line
-encodingNote (Reset _ _ Asynchronous) = "-- asynchronous reset: active high"  <> line
-encodingNote (Reset _ _ Synchronous)  = "-- synchronous reset: active high" <> line
-encodingNote _                        = emptyDoc
+encodingNote (Clock _ Enabled)    = "-- enabled clock" <> line
+encodingNote (Clock _ Regular)    = "-- clock" <> line
+encodingNote (Reset _ ActiveHigh) = "-- reset: active high"  <> line
+encodingNote (Reset _ ActiveLow)  = "-- reset: active low" <> line
+encodingNote _                    = emptyDoc
 
 tupledSemi :: Applicative f => f [Doc] -> f Doc
 tupledSemi = align . encloseSep (flatAlt (lparen <+> emptyDoc) lparen)

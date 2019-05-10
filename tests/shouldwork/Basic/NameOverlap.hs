@@ -13,8 +13,8 @@ import Clash.Prelude
     , t_output = PortName "LED"
     }) #-}
 topEntity
-    :: Clock System Source
-    -> Reset System Asynchronous
+    :: Clock System Regular
+    -> Reset System polarity
     -> Signal System Bit
 topEntity = exposeClockReset board
   where

@@ -19,8 +19,8 @@ actual
     :> Nil
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System () -> Signal System Integer
 topEntity = exposeClockReset (mealy loop actual)
 {-# NOINLINE topEntity #-}

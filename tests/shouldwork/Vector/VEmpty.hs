@@ -4,7 +4,7 @@ import Clash.Prelude
 import Clash.Explicit.Testbench
 
 topEntity
-  :: HiddenClockReset System 'Source 'Asynchronous
+  :: HiddenClockReset System 'Regular 'Asynchronous
   => Signal System Int
   -> Signal System Int
 topEntity x =

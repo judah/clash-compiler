@@ -82,7 +82,7 @@ ddrIn#
   -> Signal fast a
   -> Signal slow (a,a)
 ddrIn# (RegularClock tag) (toHighPolarity -> hRst) i0 i1 i2 =
-  case knownDomain tag of
+  case knownDomainByTag tag of
     SDomain _tag _period _edge SSynchronous _init ->
       goSync
         ( errorX "ddrIn: initial value 0 undefined"
@@ -116,7 +116,7 @@ ddrIn# (RegularClock tag) (toHighPolarity -> hRst) i0 i1 i2 =
 
 
 ddrIn# (EnabledClock tag ena) (toHighPolarity -> hRst) i0 i1 i2 =
-  case knownDomain tag of
+  case knownDomainByTag tag of
     SDomain _tag _period _edge SSynchronous _init ->
       goSync
         ( errorX "ddrIn: initial value 0 undefined"

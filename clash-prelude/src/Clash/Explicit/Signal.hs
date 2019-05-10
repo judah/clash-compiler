@@ -42,7 +42,7 @@ chosen:
 
 @
 instance KnownDomain "System" ('Domain "System" 10000 'Rising 'Asynchronous 'Defined) where
-  knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
+  knownDomain = SDomain SSymbolSNat SRising SAsynchronous SDefined
 @
 
 In words, "System" is a synthesis domain with a clock running with a period
@@ -178,7 +178,18 @@ module Clash.Explicit.Signal
   , SResetKind(..)
   , Domain(..)
   , SDomain(..)
+    -- ** Default domains
   , System
+  , XilinxSystem
+  , IntelSystem
+  , vSystem
+  , vIntelSystem
+  , vXilinxSystem
+    -- ** Domain utilities
+  , VDomain(..)
+  , vDomain
+  , createDomain
+  , knownVDomain
     -- * Clock
   , Clock, ClockKind (..)
   , freqCalc
@@ -251,12 +262,12 @@ import Clash.XException      (Undefined)
 >>> import qualified Data.List as L
 >>> :{
 instance KnownDomain "Dom2" ('Domain "Dom2" 2 'Rising 'Asynchronous 'Defined) where
-  knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
+  knownDomain = SDomain SSymbolSNat SRising SAsynchronous SDefined
 :}
 
 >>> :{
 instance KnownDomain "Dom7" ('Domain "Dom7" 7 'Rising 'Asynchronous 'Defined) where
-  knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
+  knownDomain = SDomain SSymbolSNat SRising SAsynchronous SDefined
 :}
 
 >>> type Dom2 = "Dom2"
@@ -373,7 +384,7 @@ resetSynchronizer
   -> Reset tag polarity
   -> Reset tag polarity
 resetSynchronizer clk@(clockTag -> tag) rst@(toHighPolarity -> hRst) =
-  case knownDomain tag of
+  case knownDomainByTag tag of
     SDomain _tag _period _edge SAsynchronous _init ->
       let r1 = register clk hRst True (pure False)
           r2 = register clk hRst True r1
@@ -403,8 +414,8 @@ freqCalc freq = ceiling ((1.0 / freq) / 1.0e-12)
 --
 -- @
 -- dualFlipFlop
---   :: Clock domA gatedA
---   -> Clock domB gatedB
+--   :: Clock domA enabledA
+--   -> Clock domB enabledB
 --   -> Bit
 --   -> Signal tagA Bit
 --   -> Signal tagB Bit
@@ -416,7 +427,7 @@ freqCalc freq = ceiling ((1.0 / freq) / 1.0e-12)
 --
 -- @
 -- instance KnownDomain "Dom7" ('Domain "Dom7" 2 'Rising 'Asynchronous 'Defined) where
---   knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
+--   knownDomain = SDomain SSymbolSNat SRising SAsynchronous SDefined
 --
 -- clk7 :: 'Clock' "Dom7" Regular
 -- clk7 = 'clockGen'
@@ -426,7 +437,7 @@ freqCalc freq = ceiling ((1.0 / freq) / 1.0e-12)
 --
 -- @
 -- instance KnownDomain "Dom2" ('Domain "Dom2" 2 'Rising 'Asynchronous 'Defined) where
---   knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
+--   knownDomain = SDomain SSymbolSNat SRising SAsynchronous SDefined
 --
 -- clk2 :: 'Clock' "Dom2" Regular
 -- clk2 = 'clockGen'
@@ -467,9 +478,9 @@ freqCalc freq = ceiling ((1.0 / freq) / 1.0e-12)
 unsafeSynchronizer
   :: KnownDomain tag1 conf1
   => KnownDomain tag2 conf2
-  => Clock tag1 gated1
+  => Clock tag1 enabled1
   -- ^ 'Clock' of the incoming signal
-  -> Clock tag2 gated2
+  -> Clock tag2 enabled2
   -- ^ 'Clock' of the outgoing signal
   -> Signal tag1 a
   -> Signal tag2 a

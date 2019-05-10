@@ -7,8 +7,8 @@ type Inp   = (Signed 4,Outp)
 type Outp  = (Maybe (Signed 8,Bool),Bit)
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System Inp -> Signal System Outp
 topEntity = exposeClockReset (transfer `mealy` initS)
 {-# NOINLINE topEntity #-}

@@ -3,15 +3,15 @@
     , "kind" : "Declaration"
     , "type" :
 "rom# :: KnownNat n      -- ARG[0]
-      => Clock dom gated -- clk,  ARG[1]
+      => Clock tag enabled -- clk,  ARG[1]
       -> Vec n a         -- init, ARG[2]
-      -> Signal dom Int  -- rd,   ARG[3]
-      -> Signal dom a"
+      -> Signal tag Int  -- rd,   ARG[3]
+      -> Signal tag a"
     , "template" :
 "-- rom begin
 ~GENSYM[~COMPNAME_rom][0] : block
   signal ~GENSYM[ROM][1] : ~TYP[2];
-  signal ~GENSYM[rd][2]  : integer range 0 to ~LIT[0]-1;~IF ~ISGATED[1] ~THEN
+  signal ~GENSYM[rd][2]  : integer range 0 to ~LIT[0]-1;~IF ~ISENABLED[1] ~THEN
   signal ~GENSYM[clk][3] : std_logic;
   signal ~GENSYM[ce][4]  : boolean;~ELSE ~FI
 begin
@@ -22,7 +22,7 @@ begin
                 mod ~LIT[0]
   -- pragma translate_on
                 ;
-  ~IF ~ISGATED[1] ~THEN
+  ~IF ~ISENABLED[1] ~THEN
   (~SYM[3],~SYM[4]) <= ~ARG[1];
   ~GENSYM[romSync][5] : process (~SYM[3])
   begin

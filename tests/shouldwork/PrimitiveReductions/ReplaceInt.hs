@@ -15,7 +15,7 @@ replace_int v i a = replace i a v
 
 
 topEntity
-  :: HiddenClockReset System Source Asynchronous
+  :: HiddenClockReset System Regular Asynchronous
   => Signal System Int
   -> Signal System (Vec 5 Char)
 topEntity i = a

@@ -4,8 +4,8 @@ import Clash.Prelude
 import Clash.Explicit.Testbench
 
 topEntity
-  :: Clock  System Source
-  -> Reset  System Asynchronous
+  :: Clock  System Regular
+  -> Reset  System polarity
   -> Signal System (Signed 1)
   -> Signal System (Bit, Bit, Bit)
 topEntity clk rst =

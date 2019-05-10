@@ -8,8 +8,8 @@
      , slow ~ Dom n (2*pFast)     -- ARG[2]
      , KnownNat m )               -- ARG[3]
   => SSymbol deviceFamily         -- ARG[4]
-  -> Clock slow gated             -- ARG[5]
-  -> Reset slow synchronous       -- ARG[6]
+  -> Clock slow enabled             -- ARG[5]
+  -> Reset slow polarity       -- ARG[6]
   -> Signal fast (BitVector m)    -- ARG[7]
   -> Signal slow (BitVector m,BitVector m)"
     , "template" :
@@ -22,7 +22,7 @@ altddio_in ~GENSYM[~COMPNAME_ALTDDIO_IN][7] (~IF ~ISSYNC[6] ~THEN
   .aclr (1'b0),~ELSE
   .aclr (~ARG[6]),
   .sclr (1'b0),~FI
-  .datain (~ARG[7]),~IF ~ISGATED[5] ~THEN
+  .datain (~ARG[7]),~IF ~ISENABLED[5] ~THEN
   .inclock (~ARG[5][1]),
   .inclocken (~ARG[5][0]),~ELSE
   .inclock (~ARG[5]),

@@ -4,14 +4,14 @@
     , "type" :
 "blockRamFile#
   :: (KnownNat m, HasCallStack)-- (ARG[0],ARG]1)
-  => Clock dom gated          -- clk,  ARG[2]
+  => Clock tag enabled          -- clk,  ARG[2]
   -> SNat n                   -- sz,   ARG[3]
   -> FilePath                 -- file, ARG[4]
-  -> Signal dom Int           -- rd,   ARG[5]
-  -> Signal dom Bool          -- wren, ARG[6]
-  -> Signal dom Int           -- wr,   ARG[7]
-  -> Signal dom (BitVector m) -- din,  ARG[8]
-  -> Signal dom (BitVector m)"
+  -> Signal tag Int           -- rd,   ARG[5]
+  -> Signal tag Bool          -- wren, ARG[6]
+  -> Signal tag Int           -- wr,   ARG[7]
+  -> Signal tag (BitVector m) -- din,  ARG[8]
+  -> Signal tag (BitVector m)"
     , "template" :
 "-- blockRamFile begin
 ~GENSYM[~COMPNAME_blockRamFile][0] : block
@@ -31,7 +31,7 @@
 
   signal ~GENSYM[RAM][2] : ~SYM[6](0 to ~LIT[3]-1) := ~SYM[1](~FILE[~LIT[4]]);
   signal ~GENSYM[rd][4]  : integer range 0 to ~LIT[3]-1;
-  signal ~GENSYM[wr][5]  : integer range 0 to ~LIT[3]-1;~IF ~ISGATED[2] ~THEN
+  signal ~GENSYM[wr][5]  : integer range 0 to ~LIT[3]-1;~IF ~ISENABLED[2] ~THEN
   signal ~GENSYM[clk][7] : std_logic;
   signal ~GENSYM[ce][8]  : boolean;~ELSE ~FI
 begin
@@ -46,7 +46,7 @@ begin
                 mod ~LIT[3]
   -- pragma translate_on
                 ;
-  ~IF ~VIVADO ~THEN ~IF ~ISGATED[2] ~THEN
+  ~IF ~VIVADO ~THEN ~IF ~ISENABLED[2] ~THEN
   (~SYM[7],~SYM[8]) <= ~ARG[2];
   ~GENSYM[blockRamFile_sync][9] : process(~SYM[7])
   begin
@@ -75,7 +75,7 @@ begin
       -- pragma translate_on
       ;
     end if;
-  end process;~FI ~ELSE ~IF ~ISGATED[2] ~THEN
+  end process;~FI ~ELSE ~IF ~ISENABLED[2] ~THEN
   (~SYM[7],~SYM[8]) <= ~ARG[2];
   ~SYM[9] : process(~SYM[7])
   begin

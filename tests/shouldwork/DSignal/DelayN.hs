@@ -5,14 +5,14 @@ import qualified Clash.Signal.Delayed.Bundle as D
 import Clash.Explicit.Testbench
 
 delayer
-  :: HiddenClockReset domain gated synchronous
-  => DSignal domain 0 Int
-  -> DSignal domain 2 Int
+  :: HiddenClockReset tag enabled polarity dom
+  => DSignal tag 0 Int
+  -> DSignal tag 2 Int
 delayer = delayN d2 0
 
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> Signal System Int
   -> Signal System Int
 topEntity = exposeClockReset (toSignal . delayer . fromSignal)

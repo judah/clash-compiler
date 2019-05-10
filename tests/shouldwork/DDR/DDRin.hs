@@ -8,13 +8,13 @@ type DomDDR  = Dom "A" 1000 -- fake doublespeed domain, used to model a ddr sign
 
 {-
 The four variants defined here are all the combinations of
-  clock: Gated  or Ungated
+  clock: Enabled  or Regular
   reset: Asynch or Sync
 -}
 
 
-topEntityGeneric :: Clock DomReal gated
-          -> Reset DomReal synchronous
+topEntityGeneric :: Clock DomReal enabled
+          -> Reset DomReal polarity
           -> Signal DomDDR (Unsigned 8)
           -> Signal DomReal (Unsigned 8, Unsigned 8)
 topEntityGeneric clk rst = ddrIn clk rst (i0,i1,i2)
@@ -22,25 +22,25 @@ topEntityGeneric clk rst = ddrIn clk rst (i0,i1,i2)
 -- topEntityGeneric clk rst = altddioIn (SSymbol @"Cyclone IV GX") clk rst
 
 
-topEntityUA :: Clock DomReal Source
+topEntityUA :: Clock DomReal Regular
           -> Reset DomReal Asynchronous
           -> Signal DomDDR (Unsigned 8)
           -> Signal DomReal (Unsigned 8, Unsigned 8)
 topEntityUA = topEntityGeneric
 
-topEntityUS :: Clock DomReal Source
+topEntityUS :: Clock DomReal Regular
           -> Reset DomReal Synchronous
           -> Signal DomDDR (Unsigned 8)
           -> Signal DomReal (Unsigned 8, Unsigned 8)
 topEntityUS = topEntityGeneric
 
-topEntityGA :: Clock DomReal Gated
+topEntityGA :: Clock DomReal Enabled
           -> Reset DomReal Asynchronous
           -> Signal DomDDR (Unsigned 8)
           -> Signal DomReal (Unsigned 8, Unsigned 8)
 topEntityGA = topEntityGeneric
 
-topEntityGS :: Clock DomReal Gated
+topEntityGS :: Clock DomReal Enabled
           -> Reset DomReal Synchronous
           -> Signal DomDDR (Unsigned 8)
           -> Signal DomReal (Unsigned 8, Unsigned 8)
@@ -97,8 +97,8 @@ testBenchGS = done
     done           = expectedOutput actualOutput
     done'          = not <$> done
 
-    clkDDR         = let c = tbClockGen @DomDDR (unsafeSynchronizer clkReal clkDDR done') in clockGate c $ pure True
-    clkReal        = let c = tbClockGen @DomReal done' in clockGate c $ pure True
+    clkDDR         = let c = tbClockGen @DomDDR (unsafeSynchronizer clkReal clkDDR done') in toEnabledClock c $ pure True
+    clkReal        = let c = tbClockGen @DomReal done' in toEnabledClock c $ pure True
     rstDDR         = syncResetGen @DomDDR
     rstReal        = syncResetGen @DomReal
 
@@ -111,7 +111,7 @@ testBenchGA = done
     done           = expectedOutput actualOutput
     done'          = not <$> done
 
-    clkDDR         = let c = tbClockGen @DomDDR (unsafeSynchronizer clkReal clkDDR done') in clockGate c $ pure True
-    clkReal        = let c = tbClockGen @DomReal done' in clockGate c $ pure True
+    clkDDR         = let c = tbClockGen @DomDDR (unsafeSynchronizer clkReal clkDDR done') in toEnabledClock c $ pure True
+    clkReal        = let c = tbClockGen @DomReal done' in toEnabledClock c $ pure True
     rstDDR         = asyncResetGen @DomDDR
     rstReal        = asyncResetGen @DomReal

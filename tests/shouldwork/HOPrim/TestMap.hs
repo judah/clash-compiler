@@ -14,8 +14,8 @@ coref romf (bk, _) = (*) <$> bk <*> (pure $ romf 0)
 
 mf
   :: (KnownNat n, KnownNat n1, KnownNat n2)
-  => Clock System50 gated
-  -> Reset System50 synchronous
+  => Clock System50 enabled
+  -> Reset System50 polarity
   -> (Vec n RomFunction, SNat n1, SNat n2)
   -> (Sig1 Word1, Sig1 Bool)
   -> Sig1 Word1
@@ -39,7 +39,7 @@ romF2 :: RomFunction
 romF2 addr = 1
 
 topEntity
-  :: Clock System50 Source
+  :: Clock System50 Regular
   -> Reset System50 Asynchronous
   -> (Sig1 Word1, Sig1 Bool)
   -> Sig1 Word1

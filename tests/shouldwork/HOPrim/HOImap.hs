@@ -11,10 +11,10 @@ import Clash.Explicit.Testbench
 busSwitch2
   :: forall n domain a b
    . KnownNat n
-  => Vec n (Signal domain (Maybe a) -> Signal domain b ) -- vector of functions
-  -> Signal domain (Index n)               -- address as index of vectors
-  -> Signal domain (Maybe a)               -- input
-  -> Vec n (Signal domain b)                      -- output
+  => Vec n (Signal tag (Maybe a) -> Signal tag b ) -- vector of functions
+  -> Signal tag (Index n)               -- address as index of vectors
+  -> Signal tag (Maybe a)               -- input
+  -> Vec n (Signal tag b)                      -- output
 busSwitch2 vec addr inp = zipWith ($) vec r where
     r = unbundle (liftA2 f addr inp)
     f i a = replace i a (repeat Nothing)
@@ -26,17 +26,17 @@ busSwitch2 vec addr inp = zipWith ($) vec r where
 busSwitch1
   :: forall n domain a b
    . KnownNat n
-  => Vec n (Signal domain (Maybe a) -> Signal domain b ) -- vector of functions
-  -> Signal domain (Index n)                      -- address as index of vectors
-  -> Signal domain (Maybe a)                      -- input
-  -> Vec n (Signal domain b)                      -- output
+  => Vec n (Signal tag (Maybe a) -> Signal tag b ) -- vector of functions
+  -> Signal tag (Index n)                      -- address as index of vectors
+  -> Signal tag (Maybe a)                      -- input
+  -> Vec n (Signal tag b)                      -- output
 busSwitch1 vec addr inp = r where
     r = imap f vec
     f :: Index n
-      -> (Signal domain (Maybe a) -> Signal domain b)
-      -> Signal domain b
+      -> (Signal tag (Maybe a) -> Signal tag b)
+      -> Signal tag b
     f n x = x s where
-       s :: Signal domain (Maybe a)
+       s :: Signal tag (Maybe a)
        s = liftA2 fa inp addr
        fa :: Maybe a
           -> Index n
@@ -46,8 +46,8 @@ busSwitch1 vec addr inp = r where
 
 -- based on address modify input signal
 topEntity
-  :: Clock System Source
-  -> Reset System Asynchronous
+  :: Clock System Regular
+  -> Reset System polarity
   -> (Signal System (Index 4)
      ,Signal System (Maybe (Signed 5)))
   -> Signal System (Vec 4 (Maybe (Signed 5)))

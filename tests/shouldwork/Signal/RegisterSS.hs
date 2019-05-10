@@ -6,9 +6,9 @@ testInput :: Vec 7 (Signed 8)
 testInput = 1 :> 2 :> 3 :> 4 :> 5 :> 6 :> 7 :> Nil
 
 resetInput
-  :: Clock domain gated
+  :: Clock tag enabled
   -> Reset domain sync
-  -> Signal domain Bool
+  -> Signal tag Bool
 resetInput clk reset
   = register clk reset True
   $ register clk reset False
@@ -18,7 +18,7 @@ resetInput clk reset
   $ pure False
 
 topEntity
-  :: Clock System Source
+  :: Clock System Regular
   -> Reset System Synchronous
   -> Signal System (Signed 8)
 topEntity clk rst = head <$> r

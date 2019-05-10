@@ -3,11 +3,11 @@
     , "kind" : "Declaration"
     , "type" :
 "romFile# :: KnownNat m      -- ARG[0]
-          => Clock dom gated -- clk,  ARG[1]
+          => Clock tag enabled -- clk,  ARG[1]
           -> SNat n          -- sz,   ARG[2]
           -> FilePath        -- file, ARG[3]
-          -> Signal dom Int  -- rd,   ARG[4]
-          -> Signal dom (BitVector m)"
+          -> Signal tag Int  -- rd,   ARG[4]
+          -> Signal tag (BitVector m)"
     , "outputReg" : true
     , "template" :
 "// romFile begin
@@ -16,7 +16,7 @@ reg ~TYPO ~GENSYM[ROM][0] [0:~LIT[2]-1];
 initial begin
   $readmemb(~FILE[~LIT[3]],~SYM[0]);
 end
-~IF ~ISGATED[1] ~THEN
+~IF ~ISENABLED[1] ~THEN
 always @(posedge ~ARG[1][1]) begin : ~GENSYM[~COMPNAME_romFile][2]
   if (~ARG[1][0]) begin
     ~RESULT <= ~SYM[0][~ARG[4]];

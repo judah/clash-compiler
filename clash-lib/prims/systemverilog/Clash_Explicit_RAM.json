@@ -4,8 +4,8 @@
     , "type" :
 "asyncRam#
   :: HasCallStack      -- ARG[0]
-  => Clock wdom wgated -- ^ wclk, ARG[1]
-  -> Clock rdom rgated -- ^ rclk, ARG[2]
+  => Clock wdom wenabled -- ^ wclk, ARG[1]
+  -> Clock rdom renabled -- ^ rclk, ARG[2]
   -> SNat n            -- ^ sz,   ARG[3]
   -> Signal rdom Int   -- ^ rd,   ARG[4]
   -> Signal wdom Bool  -- ^ en,   ARG[5]
@@ -14,7 +14,7 @@
   -> Signal rdom a"
     , "template" :
 "// asyncRam begin
-logic [~SIZE[~TYP[7]]-1:0] ~GENSYM[RAM][0] [0:~LIT[3]-1];~IF ~ISGATED[1] ~THEN
+logic [~SIZE[~TYP[7]]-1:0] ~GENSYM[RAM][0] [0:~LIT[3]-1];~IF ~ISENABLED[1] ~THEN
 always @(posedge ~ARG[1][1]) begin : ~GENSYM[~COMPNAME_Ram][1]
   if (~ARG[5] & ~ARG[1][0]) begin
     ~SYM[0][~ARG[6]] <= ~TOBV[~ARG[7]][~TYP[7]];
