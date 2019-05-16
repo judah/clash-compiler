@@ -1,15 +1,18 @@
 [ { "Primitive" :
     { "name"     : "GHC.Prim.dataToTag#"
+    , "workInfo" : "Never"
     , "primType" : "Function"
     }
   }
 , { "Primitive" :
     { "name"     : "GHC.Prim.tagToEnum#"
+    , "workInfo" : "Never"
     , "primType" : "Function"
     }
   }
 , { "BlackBox" :
     { "name"      : "GHC.Prim.unsafeCoerce#"
+    , "workInfo"  : "Never"
     , "kind"      : "Expression"
     , "type"      : "unsafeCoerce# :: a -> b"
     , "template"  : "~ARG[0]"

@@ -62,7 +62,7 @@ import           Clash.Netlist.Util
   (splitNormalized, coreTypeToHWType')
 import           Clash.Normalize.Strategy
 import           Clash.Normalize.Transformations
-  (appProp, bindConstantVar, caseCon, flattenLet, reduceConst, topLet,
+  (appProp, bindWorkFree, caseCon, flattenLet, reduceConst, topLet,
    reduceNonRepPrim, removeUnusedExpr)
 import           Clash.Normalize.Types
 import           Clash.Normalize.Util
@@ -330,7 +330,7 @@ flattenCallTree (CBranch (nm,(nm',sp,inl,tm)) used) = do
   where
     flatten =
       innerMost (apply "appProp" appProp >->
-                 apply "bindConstantVar" bindConstantVar >->
+                 apply "bindWorkFree" bindWorkFree >->
                  apply "caseCon" caseCon >->
                  apply "reduceConst" reduceConst >->
                  apply "reduceNonRepPrim" reduceNonRepPrim >->

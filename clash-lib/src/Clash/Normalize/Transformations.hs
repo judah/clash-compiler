@@ -31,7 +31,7 @@ module Clash.Normalize.Transformations
   , nonRepSpec
   , etaExpansionTL
   , nonRepANF
-  , bindConstantVar
+  , bindWorkFree
   , constantSpec
   , makeANF
   , deadCode
@@ -88,26 +88,26 @@ import           Clash.Core.Evaluator        (PureHeap, whnf')
 import           Clash.Core.Name
   (Name (..), NameSort (..), mkUnsafeSystemName)
 import           Clash.Core.FreeVars
-  (localIdOccursIn, localIdsDoNotOccurIn, freeLocalIds, termFreeTyVars, typeFreeVars, localVarsDoNotOccurIn)
+  (localIdOccursIn, localIdDoesNotOccurIn, localIdsDoNotOccurIn, freeLocalIds, termFreeTyVars, typeFreeVars, localVarsDoNotOccurIn)
 import           Clash.Core.Literal          (Literal (..))
 import           Clash.Core.Pretty           (showPpr)
 import           Clash.Core.Subst
   (substTm, mkSubst, extendIdSubst, extendIdSubstList, extendTvSubst,
    extendTvSubstList, freshenTm, substTyInVar, deShadowTerm)
 import           Clash.Core.Term
-  (LetBinding, Pat (..), Term (..), CoreContext (..), isLambdaBodyCtx,
-   collectArgs)
+  (LetBinding, Pat (..), Term (..), CoreContext (..), PrimInfo (..),
+   isLambdaBodyCtx, collectArgs)
 import           Clash.Core.Type             (TypeView (..), applyFunTy,
                                               isPolyFunCoreTy,
                                               normalizeType, splitFunForallTy,
                                               splitFunTy, typeKind,
-                                              tyView, undefinedTy)
+                                              tyView)
 import           Clash.Core.TyCon            (TyConMap, tyConDataCons)
 import           Clash.Core.Util
   (isCon, isFun, isLet, isPolyFun, isPrim,
    isSignalType, isVar, mkApps, mkLams, mkVec, piResultTy, termSize, termType,
    tyNatSize, patVars, isAbsurdAlt, altEqs, substInExistentials,
-   solveFirstNonAbsurd, patIds, isLocalVar)
+   solveFirstNonAbsurd, patIds, isLocalVar, undefinedTm)
 import           Clash.Core.Var
   (Id, Var (..), isGlobalId, isLocalId, mkLocalId)
 import           Clash.Core.VarEnv
@@ -451,7 +451,7 @@ caseCon (TransformContext is0 _) (Case scrut ty alts)
         changed (substTm "caseCon1" subst e')
       _ -> case alts of
              ((DefaultPat,e):_) -> changed e
-             _ -> changed (mkApps (Prim "Clash.Transformations.undefined" undefinedTy) [Right ty])
+             _ -> changed (undefinedTm ty)
   where
     equalCon dc (DataPat dc' _ _) = dcTag dc == dcTag dc'
     equalCon _  _                 = False
@@ -742,10 +742,10 @@ deadCode _ e@(Letrec xes body) = do
 deadCode _ e = return e
 
 removeUnusedExpr :: HasCallStack => NormRewrite
-removeUnusedExpr _ e@(collectArgs -> (p@(Prim nm pty),args)) = do
+removeUnusedExpr _ e@(collectArgs -> (p@(Prim nm pInfo),args)) = do
   bbM <- HashMap.lookup nm <$> Lens.use (extra.primitives)
   case bbM of
-    Just (extractPrim ->  Just (BlackBox pNm _ _ _ _ _ inc templ)) -> do
+    Just (extractPrim ->  Just (BlackBox pNm _ _ _ _ _ _ inc templ)) -> do
       let usedArgs | isFromInt pNm
                    = [0,1,2]
                    | nm `elem` ["Clash.Annotations.BitRepresentation.Deriving.dontApplyInHDL"
@@ -760,7 +760,7 @@ removeUnusedExpr _ e@(collectArgs -> (p@(Prim nm pty),args)) = do
          else changed (mkApps p args')
     _ -> return e
   where
-    arity = length . Either.lefts . fst $ splitFunForallTy pty
+    arity = length . Either.lefts . fst $ splitFunForallTy (primType pInfo)
 
     go _ _ _ [] = return []
     go tcm n used (Right ty:args') = do
@@ -769,7 +769,7 @@ removeUnusedExpr _ e@(collectArgs -> (p@(Prim nm pty),args)) = do
     go tcm n used (Left tm : args') = do
       args'' <- go tcm (n+1) used args'
       let ty = termType tcm tm
-          p' = mkApps (Prim "Clash.Transformations.removedArg" undefinedTy) [Right ty]
+          p' = removedTm ty
       if n < arity && n `notElem` used
          then return (Left p' : args'')
          else return (Left tm : args'')
@@ -799,19 +799,19 @@ removeUnusedExpr _ e@(collectArgs -> (Data dc, [_,Right aTy,Right nTy,_,Left a,L
 
 removeUnusedExpr _ e = return e
 
--- | Inline let-bindings when the RHS is either a local variable reference or
--- is constant (except clock or reset generators)
-bindConstantVar :: HasCallStack => NormRewrite
-bindConstantVar = inlineBinders test
+-- | Inline let-bindings when the RHS does not perform any work, i.e. doesn't
+-- increase the size of the circuit
+bindWorkFree :: HasCallStack => NormRewrite
+bindWorkFree = inlineBinders test
   where
-    test _ (_, e) = case isLocalVar e of
+    test _ (i, e) | i `localIdDoesNotOccurIn` e = case isLocalVar e of
       True -> return True
-      _    -> isConstantNotClockReset e >>= \case
+      _    -> case isWorkFree e of
         True -> Lens.use (extra.inlineConstantLimit) >>= \case
           0 -> return True
           n -> return (termSize e <= n)
         _ -> return False
-    -- test _ _ = return False
+    test _ _ = return False
 
 -- | Push a cast over a case into it's alternatives.
 caseCast :: HasCallStack => NormRewrite
@@ -1095,9 +1095,8 @@ constantSpec _ e = return e
 -- we inline global binders, we ensure that inlined expression is deshadowed
 -- taking the InScopeSet of the context into account.
 appProp :: HasCallStack => NormRewrite
-appProp (TransformContext is0 _) (App (Lam v e) arg) = do
-  let argIsConstant = isConstant arg
-  if argIsConstant || isVar arg
+appProp (TransformContext is0 _) (App (Lam v e) arg) =
+  if isWorkFree arg || isVar arg
     then do
       let subst = extendIdSubst (mkSubst is0) v arg
       changed $ substTm "appProp.AppLam" subst e
@@ -1107,11 +1106,10 @@ appProp _ (App (Letrec v e) arg) = do
   changed (Letrec v (App e arg))
 
 appProp ctx@(TransformContext is0 _) (App (Case scrut ty alts) arg) = do
-  let argIsConstant = isConstant arg
   tcm <- Lens.view tcCache
   let argTy = termType tcm arg
       ty' = applyFunTy tcm ty argTy
-  if argIsConstant || isVar arg
+  if isWorkFree arg || isVar arg
     then do
       let alts' = map (second (`App` arg)) alts
       changed $ Case scrut ty' alts'
@@ -1158,8 +1156,7 @@ appPropFast ctx@(TransformContext is _) = \case
 
   go is0 (Lam v e) (Left arg:args) = do
     setChanged
-    let argIsConstant = isConstant arg
-    if argIsConstant || isVar arg
+    if isWorkFree arg || isVar arg
       then do
         let subst = extendIdSubst (mkSubst is0) v arg
         go is0 (substTm "appPropFast.AppLam" subst e) args
@@ -1205,11 +1202,10 @@ appPropFast ctx@(TransformContext is _) = \case
     return (ty2,ls1,Right t:args1)
 
   goCaseArg isA0 ty0 ls0 (Left arg:args0) = do
-    let argIsConstant = isConstant arg
     tcm <- Lens.view tcCache
     let argTy = termType tcm arg
         ty1   = applyFunTy tcm ty0 argTy
-    case argIsConstant || isVar arg of
+    case isWorkFree arg || isVar arg of
       True -> do
         (ty2,ls1,args1) <- goCaseArg isA0 ty1 ls0 args0
         return (ty2,ls1,Left arg:args1)
@@ -1391,9 +1387,7 @@ collectANF ctx e@(App appf arg)
   , isCon conVarPrim || isPrim conVarPrim || isVar conVarPrim
   = do
     untranslatable <- lift (isUntranslatable False arg)
-    let localVar   = isLocalVar arg
-    constantNoCR   <- lift (isConstantNotClockReset arg)
-    case (untranslatable,localVar || constantNoCR,arg) of
+    case (untranslatable,isLocalVar arg || isWorkFree arg,arg) of
       (False,False,_) -> do
         tcm <- Lens.view tcCache
         -- See Note [ANF InScopeSet]
@@ -1442,10 +1436,7 @@ collectANF _ e@(Case _ _ [(DataPat dc _ _,_)])
   | nameOcc (dcName dc) == "Clash.Signal.Internal.:-" = return e
 
 collectANF ctx (Case subj ty alts) = do
-    let localVar = isLocalVar subj
-    let isConstantSubj = isConstant subj
-
-    subj' <- if localVar || isConstantSubj
+    subj' <- if isLocalVar subj || isWorkFree subj
       then return subj
       else do
         tcm <- Lens.view tcCache
@@ -1456,7 +1447,7 @@ collectANF ctx (Case subj ty alts) = do
         tellBinders [(argId,subj)]
         return (Var argId)
 
-    alts' <- mapM (doAlt subj') alts
+    alts' <- mapM (doAlt subj' (length alts)) alts
 
     case alts' of
       [(DataPat _ [] xs,altExpr)]
@@ -1465,16 +1456,14 @@ collectANF ctx (Case subj ty alts) = do
       _ -> return (Case subj' ty alts')
   where
     doAlt
-      :: Term -> (Pat,Term)
+      :: Term -> Int -> (Pat,Term)
       -> StateT ([LetBinding],InScopeSet) (RewriteMonad NormalizeState)
                 (Pat,Term)
-    doAlt subj' alt@(DataPat dc exts xs,altExpr) | not (bindsExistentials exts xs) = do
-      let lv = isLocalVar altExpr
+    doAlt subj' nAlts alt@(DataPat dc exts xs,altExpr) | not (bindsExistentials exts xs) = do
       patSels <- Monad.zipWithM (doPatBndr subj' dc) xs [0..]
-      let altExprIsConstant = isConstant altExpr
       let usesXs (Var n) = any (== n) xs
           usesXs _       = False
-      if (lv && (not (usesXs altExpr) || length alts == 1)) || altExprIsConstant
+      if (isLocalVar altExpr && (not (usesXs altExpr) || nAlts == 1)) || (nAlts > 1 && isWorkFree altExpr)
         then do
           -- See Note [ANF InScopeSet]
           tellBinders patSels
@@ -1487,11 +1476,9 @@ collectANF ctx (Case subj ty alts) = do
           -- See Note [ANF InScopeSet]
           tellBinders ((altId,altExpr):patSels)
           return (DataPat dc exts xs,Var altId)
-    doAlt _ alt@(DataPat {}, _) = return alt
-    doAlt _ alt@(pat,altExpr) = do
-      let lv = isLocalVar altExpr
-      let altExprIsConstant = isConstant altExpr
-      if lv || altExprIsConstant
+    doAlt _ _ alt@(DataPat {}, _) = return alt
+    doAlt _ nAlts alt@(pat,altExpr) =
+      if isLocalVar altExpr || (nAlts > 1 && isWorkFree altExpr)
         then return alt
         else do
           tcm <- Lens.view tcCache
@@ -1956,8 +1943,7 @@ reduceNonRepPrim c@(TransformContext is0 ctx) e@(App _ _) | (Prim nm _, args) <-
                                     [Right lTy
                                     ,Right rTy
                                     ,Left  bvArg
-                                    ,Left  (mkApps (Prim "Clash.Transformations.removedArg" undefinedTy)
-                                                   [Right rTy])
+                                    ,Left  (removedTm rTy)
                                     ]
 
               changed tup
@@ -1967,8 +1953,7 @@ reduceNonRepPrim c@(TransformContext is0 ctx) e@(App _ _) | (Prim nm _, args) <-
                   tup          = mkApps (Data tupDc)
                                     [Right lTy
                                     ,Right rTy
-                                    ,Left  (mkApps (Prim "Clash.Transformations.removedArg" undefinedTy)
-                                                   [Right lTy])
+                                    ,Left  (removedTm lTy)
                                     ,Left  bvArg
                                     ]
 

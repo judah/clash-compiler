@@ -29,7 +29,7 @@ import Clash.Rewrite.Util
 -- | Normalisation transformation
 normalization :: NormRewrite
 normalization = rmDeadcode >-> constantPropagation >-> etaTL >-> rmUnusedExpr >-!-> anf >-!-> rmDeadcode >->
-                bindConst >-> letTL >-> evalConst >-!-> cse >-!-> cleanup >-> recLetRec
+                bindWF >-> letTL >-> evalConst >-!-> cse >-!-> cleanup >-> recLetRec
   where
     etaTL      = apply "etaTL" etaExpansionTL !-> topdownR (apply "applicationPropagation" appPropFast)
     anf        = topdownR (apply "nonRepANF" nonRepANF) >-> apply "ANF" makeANF >-> topdownR (apply "caseCon" caseCon)
@@ -37,14 +37,14 @@ normalization = rmDeadcode >-> constantPropagation >-> etaTL >-> rmUnusedExpr >-
     recLetRec  = apply "recToLetRec" recToLetRec
     rmUnusedExpr = bottomupR (apply "removeUnusedExpr" removeUnusedExpr)
     rmDeadcode = bottomupR (apply "deadcode" deadCode)
-    bindConst  = topdownR (apply "bindConstantVar" bindConstantVar)
+    bindWF     = topdownR (apply "bindWorkFree" bindWorkFree)
     -- See [Note] bottomup traversal evalConst:
     evalConst  = bottomupR (apply "evalConst" reduceConst)
     cse        = topdownR (apply "CSE" simpleCSE)
     cleanup    = topdownR (apply "etaExpandSyn" etaExpandSyn) >->
                  topdownSucR (apply "inlineCleanup" inlineCleanup) !->
                  innerMost (applyMany [("caseCon"        , caseCon)
-                                      ,("bindConstantVar", bindConstantVar)
+                                      ,("bindWorkFree"   , bindWorkFree)
                                       ,("letFlat"        , flattenLet)])
                  >-> rmDeadcode >-> letTL
 
@@ -63,7 +63,7 @@ constantPropagation = inlineAndPropagate >->
     transPropagateAndInline :: [(String,NormRewrite)]
     transPropagateAndInline =
       [ ("applicationPropagation", appPropFast          )
-      , ("bindConstantVar"       , bindConstantVar      )
+      , ("bindWorkFree"          , bindWorkFree         )
       , ("caseLet"               , caseLet              )
       , ("caseCase"              , caseCase             )
       , ("caseCon"               , caseCon              )
