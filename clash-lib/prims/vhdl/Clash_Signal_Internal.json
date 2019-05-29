@@ -13,15 +13,14 @@
     , "template" :
 "-- delay begin~IF ~ISENABLED[3] ~THEN
 ~GENSYM[~RESULT_delay][0] : block
-  signal ~GENSYM[clk][1] : std_logic;
-  signal ~GENSYM[ce][2]  : boolean;
-  signal ~GENSYM[~RESULT_reg][3]   : ~TYPO := ~CONST[4];
+  signal ~GENSYM[~RESULT_reg][1]   : ~TYPO := ~CONST[4];
 begin
   ~GENSYM[~RESULT_dly][4] : process(~ARG[2])
   begin
+    ~RESULT <= ~SYM[1];
     if rising_edge(~ARG[2]) then
       if ~ARG[3] then
-        ~RESULT <= ~ARG[5]
+        ~SYM[1] <= ~ARG[5]
         -- pragma translate_off
         after 1 ps
         -- pragma translate_on
@@ -31,13 +30,13 @@ begin
   end process;
 end block;~ELSE
 ~SYM[0] : block
-  signal ~SYM[3] : ~TYPO := ~CONST[4];
+  signal ~SYM[1] : ~TYPO := ~CONST[4];
 begin
-  ~RESULT <= ~SYM[3];
+  ~RESULT <= ~SYM[1];
   ~SYM[4] : process(~ARG[2])
   begin
     if rising_edge(~ARG[2]) then
-      ~SYM[3] <= ~ARG[5]
+      ~SYM[1] <= ~ARG[5]
       -- pragma translate_off
       after 1 ps
       -- pragma translate_on

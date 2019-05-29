@@ -9,6 +9,7 @@ folder
   => DSignal tag 0 (Vec 4 Int)
   -> DSignal tag 2 Int
 folder = delayedFold d1 0 (+) . D.unbundle
+--{-# NOINLINE folder #-}
 
 topEntity
   :: Clock System

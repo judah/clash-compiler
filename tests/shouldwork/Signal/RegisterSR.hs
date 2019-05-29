@@ -1,4 +1,6 @@
-module RegisterSS where
+module RegisterSR where
+
+-- Register: Synchronous, Regular
 
 import Clash.Explicit.Prelude
 
@@ -22,21 +24,20 @@ resetInput clk reset en
 topEntity
   :: Clock XilinxSystem
   -> Reset XilinxSystem
-  -> Enable XilinxSystem
   -> Signal XilinxSystem (Signed 8)
-topEntity clk rst en = head <$> r
+topEntity clk rst = head <$> r
   where
-    r = register clk rst en testInput (flip rotateLeftS d1 <$> r)
+    r = register clk rst enableGen testInput (flip rotateLeftS d1 <$> r)
 
-topEntitySS clk rst en = topEntity clk srst en
+topEntitySR clk rst = topEntity clk srst 
   where
-    srst = unsafeFromHighPolarity (resetInput clk rst en)
-{-# NOINLINE topEntitySS #-}
+    srst = unsafeFromHighPolarity (resetInput clk rst enableGen)
+{-# NOINLINE topEntitySR #-}
 
 testBench :: Signal XilinxSystem Bool
 testBench = done
   where
     expectedOutput = outputVerifier clk rst (1 :> 1 :> 2 :> 3 :> 1 :> 1 :> 2 :> 3 :> Nil)
-    done           = expectedOutput (topEntitySS clk rst enableGen)
+    done           = expectedOutput (topEntitySR clk rst)
     clk            = tbClockGen (not <$> done)
     rst            = resetGen

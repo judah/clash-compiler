@@ -1,4 +1,6 @@
-module RegisterAS where
+module RegisterAR where
+
+-- Register: Asynchronous, Regular
 
 import Clash.Explicit.Prelude
 
@@ -22,21 +24,20 @@ resetInput clk reset en
 topEntity
   :: Clock System
   -> Reset System
-  -> Enable System
   -> Signal System (Signed 8)
-topEntity clk rst en = head <$> r
+topEntity clk rst = head <$> r
   where
-    r = register clk rst en testInput (flip rotateLeftS d1 <$> r)
+    r = register clk rst enableGen testInput (flip rotateLeftS d1 <$> r)
 
-topEntityAS clk rst en = topEntity clk arst en
+topEntityAR clk rst = topEntity clk arst 
   where
-    arst = unsafeFromHighPolarity (resetInput clk rst en)
-{-# NOINLINE topEntityAS #-}
+    arst = unsafeFromHighPolarity (resetInput clk rst enableGen)
+{-# NOINLINE topEntityAR #-}
 
 testBench :: Signal System Bool
 testBench = done
   where
     expectedOutput = outputVerifier clk rst (1 :> 1 :> 2 :> 1 :> 1 :> 1 :> 2 :> 3 :> Nil)
-    done           = expectedOutput (topEntityAS clk rst enableGen)
+    done           = expectedOutput (topEntityAR clk rst)
     clk            = tbSystemClockGen (not <$> done)
     rst            = systemResetGen
