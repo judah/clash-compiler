@@ -1,6 +1,7 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
                   2017     , Google Inc.
+                  2019     , Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 -}
@@ -34,7 +35,7 @@ module Clash.Signal.Delayed
     -- * Signal \<-\> DSignal conversion
   , fromSignal
   , toSignal
-    -- * List \<-\> DSignal conversion (not synthesisable)
+    -- * List \<-\> DSignal conversion (not synthesizable)
   , dfromList
     -- ** lazy versions
   , dfromList_lazy
@@ -47,7 +48,8 @@ where
 import           Data.Coerce                   (coerce)
 import           Data.Kind                     (Type)
 import           Data.Proxy                    (Proxy(..))
-import           GHC.TypeLits                  (KnownNat, type (^), type (+), type (*), Nat)
+import           GHC.TypeLits
+  (KnownNat, Symbol, type (^), type (+), type (*), Nat)
 import           Data.Singletons.Prelude       (Apply, TyFun, type (@@))
 
 import Clash.Signal.Delayed.Internal
@@ -56,7 +58,7 @@ import Clash.Signal.Delayed.Internal
 import qualified Clash.Explicit.Signal.Delayed as E
 import           Clash.Sized.Vector            (Vec, dtfold)
 import           Clash.Signal
-  (HiddenClockReset, hideClockReset, Signal, delay, Domain(..))
+  (HiddenClockResetEnable , hideClockResetEnable, Signal, delay)
 
 import           Clash.Promoted.Nat            (SNat (..), snatToInteger)
 import           Clash.XException              (Undefined)
@@ -65,46 +67,46 @@ import           Clash.XException              (Undefined)
 >>> :set -XDataKinds -XTypeOperators -XTypeApplications -XFlexibleContexts
 >>> import Clash.Prelude
 >>> let delay3 = delayed (-1 :> -1 :> -1 :> Nil)
->>> let delay2 = delayedI :: HiddenClockReset domain gated synchronous => Int -> DSignal domain n Int -> DSignal domain (n + 2) Int
+>>> let delay2 = delayedI :: HiddenClockResetEnable tag dom => Int -> DSignal tag n Int -> DSignal tag (n + 2) Int
 >>> let delayN2 = delayN d2
->>> let delayI2 = delayI :: HiddenClockReset domain gated synchronous => Int -> DSignal domain n Int -> DSignal domain (n + 2) Int
->>> let countingSignals = Clash.Prelude.repeat (dfromList [0..]) :: Vec 4 (DSignal domain 0 Int)
+>>> let delayI2 = delayI :: HiddenClockResetEnable tag dom => Int -> DSignal tag n Int -> DSignal tag (n + 2) Int
+>>> let countingSignals = Clash.Prelude.repeat (dfromList [0..]) :: Vec 4 (DSignal tag 0 Int)
 -}
 
 -- | Delay a 'DSignal' for @d@ periods.
 --
 -- @
 -- delay3
---   :: HiddenClockReset domain gated synchronous
---   => 'DSignal' domain n Int
---   -> 'DSignal' domain (n + 3) Int
+--   :: HiddenClockResetEnable tag dom
+--   => 'DSignal' tag n Int
+--   -> 'DSignal' tag (n + 3) Int
 -- delay3 = 'delayed' (-1 ':>' -1 ':>' -1 ':>' 'Nil')
 -- @
 --
--- >>> sampleN 7 (toSignal (delay3 (dfromList [0..])))
+-- >>> sampleN @System 7 (toSignal (delay3 (dfromList [0..])))
 -- [-1,-1,-1,-1,1,2,3]
 delayed
   :: ( KnownNat d
-     , HiddenClockReset domain gated synchronous
+     , HiddenClockResetEnable tag dom
      , Undefined a
      )
   => Vec d a
-  -> DSignal domain n a
-  -> DSignal domain (n + d) a
-delayed = hideClockReset E.delayed
+  -> DSignal tag n a
+  -> DSignal tag (n + d) a
+delayed = hideClockResetEnable E.delayed
 
 -- | Delay a 'DSignal' for @d@ periods, where @d@ is derived from the context.
 --
 -- @
 -- delay2
---   :: HiddenClockReset domain gated synchronous
+--   :: HiddenClockResetEnable tag dom
 --   => Int
---   -> 'DSignal' domain n Int
---   -> 'DSignal' domain (n + 2) Int
+--   -> 'DSignal' tag n Int
+--   -> 'DSignal' tag (n + 2) Int
 -- delay2 = 'delayedI'
 -- @
 --
--- >>> sampleN 7 (toSignal (delay2 (-1) (dfromList [0..])))
+-- >>> sampleN @System 7 (toSignal (delay2 (-1) (dfromList [0..])))
 -- [-1,-1,-1,1,2,3,4]
 --
 -- Or @d@ can be specified using type application:
@@ -112,41 +114,43 @@ delayed = hideClockReset E.delayed
 -- >>> :t delayedI @3
 -- delayedI @3
 --   :: (...
+--       ...
+--       ...
 --       ...) =>
---      a -> DSignal domain n a -> DSignal domain (n + 3) a
+--      a -> DSignal tag n a -> DSignal tag (n + 3) a
 delayedI
   :: ( KnownNat d
      , Undefined a
-     , HiddenClockReset domain gated synchronous )
+     , HiddenClockResetEnable tag dom )
   => a
   -- ^ Default value
-  -> DSignal domain n a
-  -> DSignal domain (n + d) a
-delayedI = hideClockReset E.delayedI
+  -> DSignal tag n a
+  -> DSignal tag (n + d) a
+delayedI = hideClockResetEnable E.delayedI
 
 -- | Delay a 'DSignal' for @d@ cycles, the value at time 0..d-1 is /undefined/.
 --
 -- @
 -- delay2
---   :: HiddenClockReset domain gated synchronous
+--   :: HiddenClockResetEnable tag dom
 --   => Int
---   -> 'DSignal' domain n Int
---   -> 'DSignal' domain (n + 2) Int
+--   -> 'DSignal' tag n Int
+--   -> 'DSignal' tag (n + 2) Int
 -- delay2 = 'delayN' d2
 -- @
 --
--- >>> printX $ sampleN 6 (toSignal (delayN2 (-1) (dfromList [1..])))
+-- >>> printX $ sampleN @System 6 (toSignal (delayN2 (-1) (dfromList [1..])))
 -- [-1,-1,1,2,3,4]
 delayN
-  :: forall domain gated synchronous a d n
-   . ( HiddenClockReset domain gated synchronous
+  :: forall tag dom a d n
+   . ( HiddenClockResetEnable tag dom
      , Undefined a )
   => SNat d
   -> a
   -- ^ Default value
-  -> DSignal domain n a
-  -> DSignal domain (n+d) a
-delayN d dflt = coerce . go (snatToInteger d) . coerce @_ @(Signal domain a)
+  -> DSignal tag n a
+  -> DSignal tag (n+d) a
+delayN d dflt = coerce . go (snatToInteger d) . coerce @_ @(Signal tag a)
   where
     go 0 = id
     go i = delay dflt . go (i-1)
@@ -156,50 +160,50 @@ delayN d dflt = coerce . go (snatToInteger d) . coerce @_ @(Signal domain a)
 --
 -- @
 -- delayI2
---   :: HiddenClockReset domain gated synchronous
+--   :: HiddenClockResetEnable tag dom
 --   => Int
---   -> 'DSignal' domain n Int
---   -> 'DSignal' domain (n + 2) Int
+--   -> 'DSignal' tag n Int
+--   -> 'DSignal' tag (n + 2) Int
 -- delayI2 = 'delayI'
 -- @
 --
--- >>> sampleN 6 (toSignal (delayI2 (-1) (dfromList [1..])))
+-- >>> sampleN @System 6 (toSignal (delayI2 (-1) (dfromList [1..])))
 -- [-1,-1,1,2,3,4]
 --
 -- You can also use type application to do the same:
--- >>> sampleN 6 (toSignal (delayI @2 (-1) (dfromList [1..])))
+-- >>> sampleN @System 6 (toSignal (delayI @2 (-1) (dfromList [1..])))
 -- [-1,-1,1,2,3,4]
 delayI
-  :: forall d n a domain gated synchronous
-   . ( HiddenClockReset domain gated synchronous
+  :: forall d n a tag  dom
+   . ( HiddenClockResetEnable tag dom
      , Undefined a
      , KnownNat d )
   => a
   -- ^ Default value
-  -> DSignal domain n a
-  -> DSignal domain (n+d) a
+  -> DSignal tag n a
+  -> DSignal tag (n+d) a
 delayI dflt = delayN (SNat :: SNat d) dflt
 
-data DelayedFold (domain :: Domain) (n :: Nat) (delay :: Nat) (a :: Type) (f :: TyFun Nat Type) :: Type
-type instance Apply (DelayedFold domain n delay a) k = DSignal domain (n + (delay*k)) a
+data DelayedFold (tag :: Symbol) (n :: Nat) (delay :: Nat) (a :: Type) (f :: TyFun Nat Type) :: Type
+type instance Apply (DelayedFold tag n delay a) k = DSignal tag (n + (delay*k)) a
 
 -- | Tree fold over a 'Vec' of 'DSignal's with a combinatorial function,
 -- and delaying @delay@ cycles after each application.
 -- Values at times 0..(delay*k)-1 are set to a default.
 --
 -- @
--- countingSignals :: Vec 4 (DSignal domain 0 Int)
+-- countingSignals :: Vec 4 (DSignal tag 0 Int)
 -- countingSignals = repeat (dfromList [0..])
 -- @
 --
--- >>> printX $ sampleN 6 (toSignal (delayedFold d1 (-1) (+) countingSignals))
+-- >>> printX $ sampleN @System 6 (toSignal (delayedFold d1 (-1) (+) countingSignals))
 -- [-1,-2,0,4,8,12]
 --
--- >>> printX $ sampleN 8 (toSignal (delayedFold d2 (-1) (*) countingSignals))
+-- >>> printX $ sampleN @System 8 (toSignal (delayedFold d2 (-1) (*) countingSignals))
 -- [-1,-1,1,1,0,1,16,81]
 delayedFold
-  :: forall domain gated synchronous n delay k a
-   . ( HiddenClockReset domain gated synchronous
+  :: forall tag dom n delay k a
+   . ( HiddenClockResetEnable tag dom
      , Undefined a
      , KnownNat delay
      , KnownNat k )
@@ -209,14 +213,14 @@ delayedFold
   -- ^ Default value
   -> (a -> a -> a)
   -- ^ Fold operation to apply
-  -> Vec (2^k) (DSignal domain n a)
+  -> Vec (2^k) (DSignal tag n a)
   -- ^ Vector input of size 2^k
-  -> DSignal domain (n + (delay * k)) a
+  -> DSignal tag (n + (delay * k)) a
   -- ^ Output Signal delayed by (delay * k)
-delayedFold _ dflt op = dtfold (Proxy :: Proxy (DelayedFold domain n delay a)) id go
+delayedFold _ dflt op = dtfold (Proxy :: Proxy (DelayedFold tag n delay a)) id go
   where
     go :: SNat l
-       -> DelayedFold domain n delay a @@ l
-       -> DelayedFold domain n delay a @@ l
-       -> DelayedFold domain n delay a @@ (l+1)
+       -> DelayedFold tag n delay a @@ l
+       -> DelayedFold tag n delay a @@ l
+       -> DelayedFold tag n delay a @@ (l+1)
     go SNat x y = delayI dflt (op <$> x <*> y)

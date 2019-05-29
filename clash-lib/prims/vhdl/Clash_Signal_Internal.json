@@ -3,24 +3,25 @@
     , "kind" : "Declaration"
     , "type" :
 "delay#
-  :: Undefined a              -- ARG[0]
-  => Clock domain gated       -- ARG[1]
-  -> a                        -- ARG[2]
-  -> Signal clk a             -- ARG[3]
+  :: ( KnownDomain tag dom   -- ARG[0]
+     , Undefined a )          -- ARG[1]
+  => Clock tag                -- ARG[2]
+  -> Enable tag               -- ARG[3]
+  -> a                        -- ARG[4]
+  -> Signal clk a             -- ARG[5]
   -> Signal clk a"
     , "template" :
-"-- delay begin~IF ~ISGATED[1] ~THEN
+"-- delay begin~IF ~ISENABLED[3] ~THEN
 ~GENSYM[~RESULT_delay][0] : block
   signal ~GENSYM[clk][1] : std_logic;
   signal ~GENSYM[ce][2]  : boolean;
-  signal ~GENSYM[~RESULT_reg][3]   : ~TYPO := ~CONST[2];
+  signal ~GENSYM[~RESULT_reg][3]   : ~TYPO := ~CONST[4];
 begin
-  (~SYM[1],~SYM[2]) <= ~ARG[1];
-  ~GENSYM[~RESULT_dly][4] : process(~SYM[1])
+  ~GENSYM[~RESULT_dly][4] : process(~ARG[2])
   begin
-    if rising_edge(~SYM[1]) then
-      if ~SYM[2] then
-        ~RESULT <= ~ARG[3]
+    if rising_edge(~ARG[2]) then
+      if ~ARG[3] then
+        ~RESULT <= ~ARG[5]
         -- pragma translate_off
         after 1 ps
         -- pragma translate_on
@@ -30,13 +31,13 @@ begin
   end process;
 end block;~ELSE
 ~SYM[0] : block
-  signal ~SYM[3] : ~TYPO := ~CONST[2];
+  signal ~SYM[3] : ~TYPO := ~CONST[4];
 begin
   ~RESULT <= ~SYM[3];
-  ~SYM[4] : process(~ARG[1])
+  ~SYM[4] : process(~ARG[2])
   begin
-    if rising_edge(~ARG[1]) then
-      ~SYM[3] <= ~ARG[3]
+    if rising_edge(~ARG[2]) then
+      ~SYM[3] <= ~ARG[5]
       -- pragma translate_off
       after 1 ps
       -- pragma translate_on
@@ -52,33 +53,32 @@ end block;~FI
     , "kind" : "Declaration"
     , "type" :
 "register#
-  :: Undefined a              -- ARG[0]
-  => Clock domain gated       -- ARG[1]
-  -> Reset domain synchronous -- ARG[2]
-  -> a                        -- ARG[3] (powerup value)
-  -> a                        -- ARG[4] (reset value)
-  -> Signal clk a             -- ARG[5]
+  :: ( KnownDomain tag dom    -- ARG[0]
+     , Undefined a )          -- ARG[1]
+  => Clock tag                -- ARG[2]
+  -> Reset tag                -- ARG[3]
+  -> Enable tag               -- ARG[4]
+  -> a                        -- ARG[5] (powerup value)
+  -> a                        -- ARG[6] (reset value)
+  -> Signal clk a             -- ARG[7]
   -> Signal clk a"
     , "template" :
-"-- register begin~IF ~ISGATED[1] ~THEN
+"-- register begin~IF ~ISENABLED[4] ~THEN
 ~GENSYM[~COMPNAME_register][0] : block
-  signal ~GENSYM[clk][1] : std_logic;
-  signal ~GENSYM[ce][2] : boolean;
-  signal ~GENSYM[~RESULT_reg][3] : ~TYPO := ~CONST[3];
+  signal ~GENSYM[~RESULT_reg][1] : ~TYPO := ~CONST[5];
 begin
-  (~SYM[1],~SYM[2]) <= ~ARG[1];
-  ~RESULT <= ~SYM[3]; ~IF ~ISSYNC[2] ~THEN
-  ~GENSYM[~RESULT_r][4] : process(~SYM[1])
+  ~RESULT <= ~SYM[1]; ~IF ~ISSYNC[0] ~THEN
+  ~GENSYM[~RESULT_r][2] : process(~ARG[2])
   begin
-    if rising_edge(~SYM[1]) then
-      if ~ARG[2] = '1' then
-        ~SYM[3] <= ~CONST[4]
+    if rising_edge(~ARG[2]) then
+      if ~ARG[3] = '1' then
+        ~SYM[1] <= ~CONST[6]
         -- pragma translate_off
         after 1 ps
         -- pragma translate_on
         ;
-      elsif ~SYM[2] then
-        ~SYM[3] <= ~ARG[5]
+      elsif ~ARG[4] then
+        ~SYM[1] <= ~ARG[7]
         -- pragma translate_off
         after 1 ps
         -- pragma translate_on
@@ -86,13 +86,13 @@ begin
       end if;
     end if;
   end process;~ELSE
-  ~SYM[4] : process(~SYM[1],~ARG[2])
+  ~SYM[2] : process(~ARG[2],~ARG[3])
   begin
-    if ~ARG[2] = '1' then
-      ~SYM[3] <= ~CONST[4];
-    elsif rising_edge(~SYM[1]) then
-      if ~SYM[2] then
-        ~SYM[3] <= ~ARG[5]
+    if ~ARG[3] = '1' then
+      ~SYM[1] <= ~CONST[6];
+    elsif rising_edge(~ARG[2]) then
+      if ~ARG[4] then
+        ~SYM[1] <= ~ARG[7]
         -- pragma translate_off
         after 1 ps
         -- pragma translate_on
@@ -102,20 +102,20 @@ begin
   end process;~FI
 end block;~ELSE
 ~SYM[0] : block
-  signal ~SYM[3] : ~TYPO := ~CONST[3];
+  signal ~SYM[1] : ~TYPO := ~CONST[5];
 begin
-  ~RESULT <= ~SYM[3]; ~IF ~ISSYNC[2] ~THEN
-  ~SYM[4] : process(~ARG[1])
+  ~RESULT <= ~SYM[1]; ~IF ~ISSYNC[0] ~THEN
+  ~SYM[2] : process(~ARG[2])
   begin
-    if rising_edge(~ARG[1]) then
-      if ~ARG[2] = '1' then
-        ~SYM[3] <= ~CONST[4]
+    if rising_edge(~ARG[2]) then
+      if ~ARG[3] = '1' then
+        ~SYM[1] <= ~CONST[6]
         -- pragma translate_off
         after 1 ps
         -- pragma translate_on
         ;
       else
-        ~SYM[3] <= ~ARG[5]
+        ~SYM[1] <= ~ARG[7]
         -- pragma translate_off
         after 1 ps
         -- pragma translate_on
@@ -123,16 +123,16 @@ begin
       end if;
     end if;
   end process;~ELSE
-  ~SYM[4] : process(~ARG[1],~ARG[2])
+  ~SYM[2] : process(~ARG[2],~ARG[3])
   begin
-    if ~ARG[2] = '1' then
-      ~SYM[3] <= ~CONST[4]
+    if ~ARG[3] = '1' then
+      ~SYM[1] <= ~CONST[6]
       -- pragma translate_off
       after 1 ps
       -- pragma translate_on
       ;
-    elsif rising_edge(~ARG[1]) then
-      ~SYM[3] <= ~ARG[5]
+    elsif rising_edge(~ARG[2]) then
+      ~SYM[1] <= ~ARG[7]
       -- pragma translate_off
       after 1 ps
       -- pragma translate_on
@@ -144,40 +144,18 @@ end block;~FI
     }
   }
 , { "BlackBox" :
-    { "name" : "Clash.Signal.Internal.clockGate"
-    , "kind" : "Declaration"
-    , "type" :
-"clockGate
-  :: Clock domain gated -- ARG[0]
-  -> Signal domain Bool -- ARG[1]
-  -> Clock domain 'Gated"
-    , "template" :
-"-- clockGate begin~IF ~ISGATED[0] ~THEN
-~GENSYM[clockgate][0]: block is
-  signal ~GENSYM[clk][1]: std_logic;
-  signal ~GENSYM[clkEn][2]: boolean;
-begin
-  (~SYM[1],~SYM[2]) <= ~ARG[0];
-  ~RESULT <= (~SYM[1], ~SYM[2] and ~ARG[1]);
-end block;~ELSE
-~RESULT <= (~ARG[0],~ARG[1]);~FI
--- clockGate end"
-    }
-  }
-, { "BlackBox" :
     { "name"      : "Clash.Signal.Internal.clockGen"
     , "kind" : "Declaration"
     , "warning" : "Clash.Signal.Internal.clockGen is not synthesizable!"
     , "type" :
 "clockGen
-  :: (domain ~ Dom nm period -- ARG[0]
-     ,KnownSymbol nm         -- ARG[1]
-     ,KnownNat period)       -- ARG[2]
-  => Clock domain Source"
+  :: KnownDomain tag dom -- ARG[0]
+  => Clock tag"
     , "template" :
-"-- pragma translate_off
+"-- clockGen begin
+-- pragma translate_off
 ~GENSYM[clkGen][0] : process is
-  constant ~GENSYM[half_period][1] : time := ~LIT[2]0 ps / 2;
+  constant ~GENSYM[half_period][1] : time := ~PERIOD[0]0 ps / 2;
 begin
   ~RESULT <= '0';
   wait for 3000 ps;
@@ -189,28 +167,28 @@ begin
   end loop;
   wait;
 end process;
--- pragma translate_on"
+-- pragma translate_on
+-- clockGen end"
     }
   }
 , { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.tbClockGen"
+    { "name" : "Clash.Signal.Internal.tbClockGen"
     , "kind" : "Declaration"
     , "warning" : "Clash.Signal.Internal.tbClockGen is not synthesizable!"
     , "type" :
 "tbClockGen
-  :: (domain ~ Dom nm period -- ARG[0]
-     ,KnownSymbol nm         -- ARG[1]
-     ,KnownNat period)       -- ARG[2]
-  => Signal domain Bool      -- ARG[3]
-  -> Clock domain Source"
+  :: KnownDomain tag dom -- ARG[0]
+  => Signal tag Bool     -- ARG[1]
+  -> Clock tag"
     , "template" :
-"-- pragma translate_off
+"-- tbClockGen begin
+-- pragma translate_off
 ~GENSYM[clkGen][0] : process is
-  constant ~GENSYM[half_period][1] : time := ~LIT[2]0 ps / 2;
+  constant ~GENSYM[half_period][1] : time := ~PERIOD[0]0 ps / 2;
 begin
   ~RESULT <= '0';
   wait for 3000 ps;
-  while ~ARG[3] loop
+  while ~ARG[1] loop
     ~RESULT <= not ~RESULT;
     wait for ~SYM[1];
     ~RESULT <= not ~RESULT;
@@ -218,65 +196,36 @@ begin
   end loop;
   wait;
 end process;
--- pragma translate_on"
+-- pragma translate_on
+-- tbClockGen end"
     }
   }
 , { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.asyncResetGen"
+    { "name"      : "Clash.Signal.Internal.resetGen"
     , "kind" : "Declaration"
     , "type" :
-"asyncResetGen :: Reset domain 'Asynchronous"
+"resetGen :: KnownDomain tag dom => Reset tag"
     , "template" :
 "-- pragma translate_off
 ~RESULT <= '1',
-           '0' after 3001 ps;
+           '0' after ~IF~ISSYNC[0]~THEN(2999 ps + ~PERIOD[0]0 ps)~ELSE3001 ps~FI;
 -- pragma translate_on"
     }
   }
 , { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.syncResetGen"
+    { "name"      : "Clash.Signal.Internal.unsafeFromReset"
     , "kind" : "Declaration"
     , "type" :
-"syncResetGen :: ( domain ~ 'Dom n clkPeriod
-                 , KnownNat clkPeriod )
-              => Reset domain 'Synchronous"
-    , "template" :
-"-- pragma translate_off
-~RESULT <= '1',
-           '0' after (2999 ps + ~LIT[1]0 ps);
--- pragma translate_on"
-    }
-  }
-, { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.unsafeFromAsyncReset"
-    , "kind" : "Declaration"
-    , "type" :
-"unsafeFromAsyncReset :: Reset domain Asynchronous -> Signal domain Bool"
+"unsafeFromReset :: Reset tag -> Signal tag Bool"
     , "template" : "~RESULT <= true when ~ARG[0] = '1' else false;"
     }
   }
 , { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.unsafeToAsyncReset"
+    { "name"      : "Clash.Signal.Internal.unsafeToReset"
     , "kind" : "Declaration"
     , "type" :
-"unsafeToAsyncReset :: Signal domain Bool -> Reset domain Asynchronous"
-    , "template" : "~RESULT <= '1' when ~ARG[0] else '0';"
-    }
-  }
-, { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.fromSyncReset"
-    , "kind" : "Declaration"
-    , "type" :
-"fromSyncReset :: Reset domain Synchronous -> Signal domain Bool"
-    , "template" : "~RESULT <= true when ~ARG[0] = '1' else false;"
-    }
-  }
-, { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.unsafeToSyncReset"
-    , "kind" : "Declaration"
-    , "type" :
-"unsafeToSyncReset :: Signal domain Bool -> Reset domain Synchronous"
-    , "template" : "~RESULT <= '1' when ~ARG[0] else '0';"
+"unsafeToReset :: KnownDomain tag dom => Signal tag Bool -> Reset tag"
+    , "template" : "~RESULT <= '1' when ~ARG[1] = true else '0';"
     }
   }
 ]

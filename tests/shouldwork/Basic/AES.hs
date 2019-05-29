@@ -69,36 +69,36 @@ roundLast :: Vec 4 (BitVector 32) -> AESState -> AESState
 roundLast roundKey = addRoundKey roundKey . shiftRows . subBytes
 
 keyExpander
-    :: forall dom gated sync
-    .  HiddenClockReset dom gated sync
-    => Signal dom Bool
-    -> Signal dom (BitVector 128)
-    -> Signal dom (Vec 4 (BitVector 32))
+    :: forall tag dom
+    .  HiddenClockResetEnable tag dom
+    => Signal tag Bool
+    -> Signal tag (BitVector 128)
+    -> Signal tag (Vec 4 (BitVector 32))
 keyExpander start key = keyState
     where
-    keyState :: Signal dom (Vec 4 (BitVector 32))
+    keyState :: Signal tag (Vec 4 (BitVector 32))
     keyState =  register (repeat 0) $ mux start (unpack <$> key) (keyScheduleStep <$> (pack <$> rc) <*> keyState)
 
-    rc :: Signal dom (Vec 8 Bool)
+    rc :: Signal tag (Vec 8 Bool)
     rc =  register (unpack 1) $ mux start (pure $ unpack 1) (gfDouble <$> rc)
 
 aes
-    :: forall dom gated sync
-    .  HiddenClockReset dom gated sync
-    => Signal dom Bool
-    -> Signal dom (BitVector 128)
-    -> Signal dom (BitVector 128)
-    -> Signal dom (Unsigned 4, Vec 4 (BitVector 32), BitVector 128, Bool)
+    :: forall tag dom
+    .  HiddenClockResetEnable tag dom
+    => Signal tag Bool
+    -> Signal tag (BitVector 128)
+    -> Signal tag (BitVector 128)
+    -> Signal tag (Unsigned 4, Vec 4 (BitVector 32), BitVector 128, Bool)
 aes start key block = bundle (cnt, roundKey, pack <$> roundState, cnt .==. 11)
     where
 
-    roundKey :: Signal dom (Vec 4 (BitVector 32))
+    roundKey :: Signal tag (Vec 4 (BitVector 32))
     roundKey =  keyExpander start key
 
-    cnt :: Signal dom (Unsigned 4)
+    cnt :: Signal tag (Unsigned 4)
     cnt =  register 0 $ mux start 0 (cnt + 1)
 
-    roundState :: Signal dom AESState
+    roundState :: Signal tag AESState
     roundState = register (repeat (repeat 0)) $ step <$> cnt <*> roundState <*> roundKey <*> block
         where
         step :: Unsigned 4 -> AESState -> Vec 4 (BitVector 32) -> BitVector 128 -> AESState
@@ -107,4 +107,5 @@ aes start key block = bundle (cnt, roundKey, pack <$> roundState, cnt .==. 11)
             preRoundKey   = bool (mixColumns preMixColumns) preMixColumns (cnt == 10)
             preMixColumns = shiftRows $ subBytes roundState
 
-topEntity clk rst = withClockReset @System @Source @Synchronous clk rst aes
+topEntity clk rst en =
+  withClockResetEnable @System clk rst en (aes @System)

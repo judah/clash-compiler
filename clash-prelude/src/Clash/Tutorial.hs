@@ -1,6 +1,7 @@
 {-|
 Copyright : © 2014-2016, Christiaan Baaij,
-              2017     , Myrtle Software Ltd, QBayLogic, Google Inc.
+              2017-2019, Myrtle Software Ltd
+              2017     , QBayLogic, Google Inc.
 Licence   : Creative Commons 4.0 (CC BY 4.0) (http://creativecommons.org/licenses/by/4.0/)
 -}
 
@@ -121,8 +122,13 @@ let sortVL xs = map fst sorted :< (snd (last sorted))
 
 >>> let mac = mealy macT 0
 >>> :{
-topEntity :: Clock System Source -> Reset System Asynchronous -> Signal System (Signed 9, Signed 9) -> Signal System (Signed 9)
-topEntity = exposeClockReset mac
+topEntity
+  :: Clock System
+  -> Reset System
+  -> Enable System
+  -> Signal System (Signed 9, Signed 9)
+  -> Signal System (Signed 9)
+topEntity = exposeClockResetEnable mac
 :}
 
 >>> :{
@@ -131,7 +137,7 @@ let testBench :: Signal System Bool
       where
         testInput      = stimuliGenerator clk rst $(listToVecTH [(1,1) :: (Signed 9,Signed 9),(2,2),(3,3),(4,4)])
         expectedOutput = outputVerifier clk rst $(listToVecTH [0 :: Signed 9,1,5,14,14,14,14])
-        done           = expectedOutput (topEntity clk rst testInput)
+        done           = expectedOutput (topEntity clk rst enableGen testInput)
         clk            = tbSystemClockGen (not <$> done)
         rst            = systemResetGen
 :}
@@ -144,7 +150,7 @@ let fibR :: Unsigned 64 -> Unsigned 64
 :}
 
 >>> :{
-let fibS :: SystemClockReset => Signal System (Unsigned 64)
+let fibS :: SystemClockResetEnable => Signal System (Unsigned 64)
     fibS = r
       where r = register 0 r + register 0 (register 1 r)
 :}
@@ -255,7 +261,7 @@ The Clash compiler and Prelude library for circuit design only work with the
               * Windows: @%appdata%\\cabal\\bin@
               * Unix: @\$HOME\/.cabal\/bin@
 
-      * Source:
+      * Regular:
 
           * Download the sources for <http://hackage.haskell.org/package/cabal-install cabal-install>
           * Unpack (@tar xf@) the archive and @cd@ to the directory
@@ -378,15 +384,15 @@ the type of one of the sequential primitives, the @'register'@ function:
 
 @
 register
-  :: 'HiddenClockReset' domain gated synchronous
-  => a -> 'Signal' domain a -> 'Signal' domain a
+  :: 'HiddenClockReset' tag  dom
+  => a -> 'Signal' tag a -> 'Signal' tag a
 register i s = ...
 @
 
 Where we see that the second argument and the result are not just of the
-/polymorphic/ @a@ type, but of the type: @'Signal' a@. All (synchronous)
-sequential circuits work on values of type @'Signal' a@. Combinational
-circuits always work on values of, well, not of type @'Signal' a@. A 'Signal'
+/polymorphic/ @a@ type, but of the type: @'Signal' tag a@. All (synchronous)
+sequential circuits work on values of type @'Signal' tag a@. Combinational
+circuits always work on values of, well, not of type @'Signal' tag a@. A 'Signal'
 is an (infinite) list of samples, where the samples correspond to the values
 of the 'Signal' at discrete, consecutive, ticks of the /clock/. All (sequential)
 components in the circuit are synchronized to this global /clock/. For the
@@ -403,11 +409,17 @@ it has an initial value @a@ which is its output at time 0. We can further
 examine the 'register' function by taking a look at the first 4 samples of the
 'register' functions applied to a constant signal with the value 8:
 
->>> sampleN 4 (register 0 (pure 8))
+>>> sampleN @System 4 (register 0 (pure (8 :: Signed 8)))
 [0,0,8,8]
 
 Where we see that the initial value of the signal is the specified 0 value,
-followed by 8's.
+followed by 8's. You might be surprised to see /two/ zeros instead of just a
+single zero. What happens is that Clash emulates what happens /before/ the
+clock becomes active. In other words, Clash emulates the powerup values of
+registers too. Whether this is a defined or undefined value depends on your
+synthesis target, and can be configured by using a different synthesis
+@'Domain'@. The default synthesis domain, @'System', assumes that registers do
+have a powerup value - as is true for most FPGA platforms in most contexts.
 -}
 
 {- $mac2
@@ -456,10 +468,10 @@ shape of @macT@:
 
 @
 mealy
-  :: 'HiddenClockReset' domain gated synchronous
+  :: 'HiddenClockReset' tag  dom
   => (s -> i -> (s,o))
   -> s
-  -> ('Signal' i -> 'Signal' o)
+  -> ('Signal' tag i -> 'Signal' tag o)
 mealy f initS = ...
 @
 
@@ -474,7 +486,7 @@ argument is the initial state, in this case 0. We can see it is functioning
 correctly in our interpreter:
 
 >>> import qualified Data.List as L
->>> L.take 4 $ simulate mac [(1,1),(2,2),(3,3),(4,4)]
+>>> L.take 4 $ simulate @System mac [(1,1),(2,2),(3,3),(4,4)]
 [0,1,5,14]
 
 Where we simulate our sequential circuit over a list of input samples and take
@@ -493,11 +505,11 @@ if the function is monomorphic:
 
 @
 topEntity
-  :: 'Clock' System 'Source'
-  -> 'Reset' System 'Asynchronous'
+  :: 'Clock' System 'Regular'
+  -> 'Reset' System 'ActiveHigh'
   -> 'Signal' System ('Signed' 9, 'Signed' 9)
   -> 'Signal' System ('Signed' 9)
-topEntity = exposeClockReset mac
+topEntity = exposeClockResetEnable mac
 @
 
 Which makes our circuit work on 9-bit signed integers. Including the above
@@ -518,11 +530,11 @@ macT acc (x,y) = (acc',o)
 mac = 'mealy' macT 0
 
 topEntity
-  :: 'Clock' System 'Source'
-  -> 'Reset' System 'Asynchronous'
+  :: 'Clock' System 'Regular'
+  -> 'Reset' System 'ActiveHigh'
   -> 'Signal' System ('Signed' 9, 'Signed' 9)
   -> 'Signal' System ('Signed' 9)
-topEntity = 'exposeClockReset' mac
+topEntity = 'exposeClockResetEnable' mac
 @
 
 The 'topEntity' function is the starting point for the Clash compiler to
@@ -548,10 +560,10 @@ containing the top level entity.
 There are multiple reasons as to why might you want to create a so-called
 /test bench/ for the generated HDL:
 
-  * You want to compare post-synthesis / post-place&route behaviour to that of
-    the behaviour of the original generated HDL.
+  * You want to compare post-synthesis / post-place&route behavior to that of
+    the behavior of the original generated HDL.
   * Need representative stimuli for your dynamic power calculations
-  * Verify that the HDL output of the Clash compiler has the same behaviour as
+  * Verify that the HDL output of the Clash compiler has the same behavior as
     the Haskell / Clash specification.
 
 For these purposes, you can have Clash compiler generate a /test bench/. In
@@ -568,8 +580,8 @@ For example, you can test the earlier defined /topEntity/ by:
 import Clash.Explicit.Testbench
 
 topEntity
-  :: 'Clock' System 'Source'
-  -> 'Reset' System 'Asynchronous'
+  :: 'Clock' System 'Regular'
+  -> 'Reset' System 'ActiveHigh'
   -> 'Signal' System ('Signed' 9, 'Signed' 9)
   -> 'Signal' System ('Signed' 9)
 topEntity = 'exposeClockReset' mac
@@ -587,18 +599,21 @@ testBench = done
 This will create a stimulus generator that creates the same inputs as we used
 earlier for the simulation of the circuit, and creates an output verifier that
 compares against the results we got from our earlier simulation. We can even
-simulate the behaviour of the /testBench/:
+simulate the behavior of the /testBench/:
 
 >>> sampleN 8 testBench
 [False,False,False,False,False
-cycle(system10000): 5, outputVerifier
-expected value: 14, not equal to actual value: 30
+On cycle 5 of <Clock: System>, outputVerifier encountered an unexpected value:
+  Expected: 14
+  Actual:   30
 ,False
-cycle(system10000): 6, outputVerifier
-expected value: 14, not equal to actual value: 46
+On cycle 6 of <Clock: System>, outputVerifier encountered an unexpected value:
+  Expected: 14
+  Actual:   46
 ,False
-cycle(system10000): 7, outputVerifier
-expected value: 14, not equal to actual value: 62
+On cycle 7 of <Clock: System>, outputVerifier encountered an unexpected value:
+  Expected: 14
+  Actual:   62
 ,False]
 
 We can see that for the first 4 samples, everything is working as expected,
@@ -693,10 +708,10 @@ structure.
 
     @
     asStateM
-      :: 'HiddenClockReset' domain gated synchronous
+      :: 'HiddenClockReset' tag enabled polarity dom
       => (i -> 'Control.Monad.State.Lazy.State' s o)
       -> s
-      -> ('Signal' domain i -> 'Signal' domain o)
+      -> ('Signal' tag i -> 'Signal' tag o)
     asStateM f i = 'mealy' g i
       where
         g s x = let (o,s') = 'Control.Monad.State.Lazy.runState' (f x) s
@@ -724,8 +739,8 @@ fir coeffs x_t = y_t
     xs  = 'window' x_t
 
 topEntity
-  :: 'Clock' System 'Source'
-  -> 'Reset' System 'Asynchronous'
+  :: 'Clock' System 'Regular'
+  -> 'Reset' System 'ActiveHigh'
   -> 'Signal' System ('Signed' 16)
   -> 'Signal' System ('Signed' 16)
 topEntity = exposeClockReset (fir (0 ':>' 1 ':>' 2 ':>' 3 ':>' 'Nil'))
@@ -768,26 +783,26 @@ output of @'Signal' o@. However, the type of @(a,b)@ in the definition of @g@ is
 @('Signal' Bool, 'Signal' Int)@. And the type of @(i1,b1)@ is of type
 @('Signal' Int, 'Signal' Bool)@.
 
-Syntactically, @'Signal' domain (Bool,Int)@ and @('Signal' domain Bool,
-'Signal' domain Int)@ are /unequal/.
+Syntactically, @'Signal' tag (Bool,Int)@ and @('Signal' tag Bool,
+'Signal' tag Int)@ are /unequal/.
 So we need to make a conversion between the two, that is what 'bundle' and
 'unbundle' are for. In the above case 'bundle' gets the type:
 
 @
-__bundle__ :: ('Signal' domain Bool, 'Signal' domain Int) -> 'Signal' domain (Bool,Int)
+__bundle__ :: ('Signal' tag Bool, 'Signal' tag Int) -> 'Signal' tag (Bool,Int)
 @
 
 and 'unbundle':
 
 @
-__unbundle__ :: 'Signal' domain (Int,Bool) -> ('Signal' domain Int, 'Signal' domain Bool)
+__unbundle__ :: 'Signal' tag (Int,Bool) -> ('Signal' tag Int, 'Signal' tag Bool)
 @
 
 The /true/ types of these two functions are, however:
 
 @
-__bundle__   :: 'Bundle' a => 'Unbundled' domain a -> 'Signal' domain a
-__unbundle__ :: 'Bundle' a => 'Signal' domain a -> 'Unbundled' domain a
+__bundle__   :: 'Bundle' a => 'Unbundled' domain a -> 'Signal' tag a
+__unbundle__ :: 'Bundle' a => 'Signal' tag a -> 'Unbundled' domain a
 @
 
 'Unbundled' is an <https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/glasgow_exts.html#associated-data-and-type-families associated type family>
@@ -810,7 +825,7 @@ That is:
 
 @
 instance 'Bundle' (a,b) where
-  type 'Unbundled' domain (a,b) = ('Signal' domain a, 'Signal' domain b)
+  type 'Unbundled' domain (a,b) = ('Signal' tag a, 'Signal' tag b)
   bundle   (a,b) = (,) '<$>' a '<*>' b
   unbundle tup   = (fst '<$>' tup, snd '<*>' tup)
 @
@@ -862,7 +877,7 @@ Clash compiler, specifically, they allow us to:
       (sub)entities that have not changed since the last run. Caching is based
       on a @.manifest@ which is generated alongside the HDL; deleting this file
       means deleting the cache; changing this file will result in /undefined/
-      behaviour.
+      behavior.
 
 Functions with a 'Synthesize' annotation do must adhere to the following
 restrictions:
@@ -909,7 +924,7 @@ type DomInput = Dom \"Input\" 20000
 type Dom50 = Dom \"System\" 20000
 
 topEntity
-  :: Clock DomInput Source
+  :: Clock DomInput Regular
   -> Signal DomInput Bool
   -> Signal Dom50 Bit
   -> Signal Dom50 (BitVector 8)
@@ -1096,15 +1111,20 @@ import Clash.XException       (errorX, defaultSeqX)
 -- | blockRAM primitive
 blockRam#
   :: HasCallStack
-  => 'Clock' dom gated -- ^ Clock to synchronize to
-  -> 'Vec' n a         -- ^ Initial content of the BRAM, also
-                     -- determines the size, @n@, of the BRAM.
-                     --
-                     -- __NB__: __MUST__ be a constant.
-  -> 'Signal' dom Int  -- ^ Read address /r/
-  -> 'Signal' dom Bool -- ^ Write enable
-  -> 'Signal' dom Int  -- ^ Write address /w/
-  -> 'Signal' dom a    -- ^ Value to write (at address /w/)
+  => 'Clock' dom enabled
+  -- ^ Clock to synchronize to
+  -> 'Vec' n a
+  -- ^ Initial content of the BRAM, also determines the size, @n@, of the BRAM.
+  --
+  -- __NB__: __MUST__ be a constant.
+  -> 'Signal' dom Int
+  -- ^ Read address /r/
+  -> 'Signal' dom Bool
+  -- ^ Write enable
+  -> 'Signal' dom Int
+  -- ^ Write address /w/
+  -> 'Signal' dom a
+  -- ^ Value to write (at address /w/)
   -> 'Signal' dom a
   -- ^ Value of the /blockRAM/ at address /r/ from the previous clock
   -- cycle
@@ -1142,13 +1162,13 @@ And for which the /declaration/ primitive is:
   , "type" :
 "blockRam#
   :: HasCallStack    --       ARG[0]
-  => Clock dom gated -- clk,  ARG[1]
+  => Clock tag enabled -- clk,  ARG[1]
   -> Vec n a         -- init, ARG[2]
-  -> Signal dom Int  -- rd,   ARG[3]
-  -> Signal dom Bool -- wren, ARG[4]
-  -> Signal dom Int  -- wr,   ARG[5]
-  -> Signal dom a    -- din,  ARG[6]
-  -> Signal dom a"
+  -> Signal tag Int  -- rd,   ARG[3]
+  -> Signal tag Bool -- wren, ARG[4]
+  -> Signal tag Int  -- wr,   ARG[5]
+  -> Signal tag a    -- din,  ARG[6]
+  -> Signal tag a"
     , "kind" : "Declaration"
     , "template" :
 "-- blockRam begin
@@ -1271,7 +1291,7 @@ a general listing of the available template holes:
 * @~ISLIT[N]@: Is the @(N+1)@'th argument to the function a literal.
 * @~ISVAR[N]@: Is the @(N+1)@'th argument to the function explicitly not a
   literal
-* @~ISGATED[N]@: Is the @(N+1)@'th argument a gated clock, errors when called on
+* @~ISGATED[N]@: Is the @(N+1)@'th argument a enabled clock, errors when called on
   an argument which is not a 'Clock'.
 * @~ISSYNC[N]@: Is the @(N+1)@'th argument a synchronous reset, errors when
   called on an argument which is not a 'Reset'.
@@ -1292,7 +1312,7 @@ definitions that are normally not synthesizable by the Clash compiler. However,
 VHDL primitives do not give us /co-simulation/: where you would be able to
 simulate VHDL and Haskell in a /single/ environment. If you still want to
 simulate your design in Haskell, you will have to describe, in a cycle- and
-bit-accurate way, the behaviour of that (potentially complex) IP you are trying
+bit-accurate way, the behavior of that (potentially complex) IP you are trying
 to include in your design.
 
 Perhaps in the future, someone will figure out how to connect the two simulation
@@ -1319,13 +1339,13 @@ and
   , "type" :
 "blockRam#
   :: HasCallStack    -- ARG[0]
-  => Clock dom gated -- clk,  ARG[1]
+  => Clock tag enabled -- clk,  ARG[1]
   -> Vec n a         -- init, ARG[2]
-  -> Signal dom Int  -- rd,   ARG[3]
-  -> Signal dom Bool -- wren, ARG[4]
-  -> Signal dom Int  -- wr,   ARG[5]
-  -> Signal dom a    -- din,  ARG[6]
-  -> Signal dom a"
+  -> Signal tag Int  -- rd,   ARG[3]
+  -> Signal tag Bool -- wren, ARG[4]
+  -> Signal tag Int  -- wr,   ARG[5]
+  -> Signal tag a    -- din,  ARG[6]
+  -> Signal tag a"
     , "kind" : "Declaration"
     , "template" :
 "// blockRam begin
@@ -1388,13 +1408,13 @@ and
   , "type" :
 "blockRam#
   :: HasCallStack    -- ARG[0]
-  => Clock dom gated -- clk,  ARG[1]
+  => Clock tag enabled -- clk,  ARG[1]
   -> Vec n a         -- init, ARG[2]
-  -> Signal dom Int  -- rd,   ARG[3]
-  -> Signal dom Bool -- wren, ARG[4]
-  -> Signal dom Int  -- wr,   ARG[5]
-  -> Signal dom a    -- din,  ARG[6]
-  -> Signal dom a"
+  -> Signal tag Int  -- rd,   ARG[3]
+  -> Signal tag Bool -- wren, ARG[4]
+  -> Signal tag Int  -- wr,   ARG[5]
+  -> Signal tag a    -- din,  ARG[6]
+  -> Signal tag a"
     , "kind" : "Declaration"
     , "template" :
 "// blockRam begin
@@ -1450,12 +1470,12 @@ What is /not/ possible is:
   type SystemN n = Dom "systemN" n
 
   pow2Clocks
-    :: Clock (SystemN n) Source
-    -> Reset (SystemN n) Asynchronous
-    -> (Clock (SystemN (16 * n)) Source
-       ,Clock (SystemN ( 8 * n)) Source
-       ,Clock (SystemN ( 4 * n)) Source
-       ,Clock (SystemN ( 2 * n)) Source
+    :: Clock (SystemN n) Regular
+    -> Reset (SystemN n) ActiveHigh
+    -> (Clock (SystemN (16 * n)) Regular
+       ,Clock (SystemN ( 8 * n)) Regular
+       ,Clock (SystemN ( 4 * n)) Regular
+       ,Clock (SystemN ( 2 * n)) Regular
        )
   pow2Clocks clk rst = (cnt!3,cnt!2,cnt!1,cnt!0)
     where
@@ -1470,19 +1490,19 @@ What is /not/ possible is:
   pow2Clock'
     :: forall n
      . KnownNat n
-    => Clock (SystemN n) Source
-    -> Reset (SystemN n) Asynchronous
-    -> (Clock (SystemN (16 * n)) Source
-       ,Clock (SystemN ( 8 * n)) Source
-       ,Clock (SystemN ( 4 * n)) Source
-       ,Clock (SystemN ( 2 * n)) Source
+    => Clock (SystemN n) Regular
+    -> Reset (SystemN n) ActiveHigh
+    -> (Clock (SystemN (16 * n)) Regular
+       ,Clock (SystemN ( 8 * n)) Regular
+       ,Clock (SystemN ( 4 * n)) Regular
+       ,Clock (SystemN ( 2 * n)) Regular
        )
   pow2Clocks' clk rst = ('clockGen','clockGen','clockGen','clockGen')
   {\-\# NOINLINE pow2Clocks' \#-\}
   @
 
   And then create a HDL primitive, as described in later on in
-  this <#primitives tutorial>, to implement the desired behaviour in HDL.
+  this <#primitives tutorial>, to implement the desired behavior in HDL.
 
 What this means is that when Clash converts your design to VHDL/(System)Verilog,
 you end up with a top-level module/entity with multiple clock and reset ports
@@ -1491,18 +1511,18 @@ for the different clock domains. If you're targeting an FPGA, you can use e.g. a
 <http://www.xilinx.com/support/documentation/user_guides/ug472_7Series_Clocking.pdf MMCM>
 to provide the clock signals.
 
-== Building a FIFO synchroniser
+== Building a FIFO synchronizer
 
 This part of the tutorial assumes you know what <https://en.wikipedia.org/wiki/Metastability_in_electronics metastability>
 is, and how it can never truly be avoided in any asynchronous circuit. Also
 it assumes that you are familiar with the design of synchronizer circuits, and
-why a dual flip-flop synchroniser only works for bit-synchronisation and not
-word-synchronisation.
+why a dual flip-flop synchronizer only works for bit-synchronization and not
+word-synchronization.
 The explicitly clocked versions of all synchronous functions and primitives can
 be found in "Clash.Explicit.Prelude", which also re-exports the functions in
 "Clash.Signal.Explicit". We will use those functions to create a FIFO where
-the read and write port are synchronised to different clocks. Below you can find
-the code to build the FIFO synchroniser based on the design described in:
+the read and write port are synchronized to different clocks. Below you can find
+the code to build the FIFO synchronizer based on the design described in:
 <http://www.sunburst-design.com/papers/CummingsSNUG2002SJ_FIFO1.pdf>
 
 We start with enable a few options that will make writing the type-signatures for
@@ -1518,9 +1538,9 @@ import Data.Maybe             (isJust)
 import Data.Constraint.Nat    (leTrans)
 @
 
-Then we'll start with the /heart/ of the FIFO synchroniser, an asynchronous RAM
+Then we'll start with the /heart/ of the FIFO synchronizer, an asynchronous RAM
 in the form of 'asyncRam''. It's called an asynchronous RAM because the read
-port is not synchronised to any clock (though the write port is). Note that in
+port is not synchronized to any clock (though the write port is). Note that in
 Clash we don't really have asynchronous logic, there is only combinational and
 synchronous logic. As a consequence, we see in the type signature of
 'Clash.Explicit.Prelude.asyncRam':
@@ -1529,9 +1549,9 @@ synchronous logic. As a consequence, we see in the type signature of
 __asyncRam__
   :: (Enum addr, HasCallStack)
   => 'Clock' wdom wgated
-   -- ^ Clock to which to synchronise the write port of the RAM
+   -- ^ Clock to which to synchronize the write port of the RAM
   -> 'Clock' rdom rgated
-   -- ^ Clock to which the read address signal, __r__, is synchronised
+   -- ^ Clock to which the read address signal, __r__, is synchronized
   -> SNat n
   -- ^ Size __n__ of the RAM
   -> Signal rdom addr
@@ -1542,7 +1562,7 @@ __asyncRam__
    -- ^ Value of the __RAM__ at address __r__
 @
 
-that the signal containing the read address __r__ is synchronised to a different
+that the signal containing the read address __r__ is synchronized to a different
 clock. That is, there is __no__ such thing as an @AsyncSignal@ in Clash.
 
 We continue by instantiating the 'Clash.Explicit.Prelude.asyncRam':
@@ -1578,11 +1598,11 @@ ptrCompareT addrSize\@SNat flagGen (bin,ptr,flag) (s_ptr,inc) =
 @
 
 It is parametrised in both address size, @addrSize@, and status flag generator,
-@flagGen@. It has two inputs, @s_ptr@, the synchronised pointer from the other
+@flagGen@. It has two inputs, @s_ptr@, the synchronized pointer from the other
 clock domain, and @inc@, which indicates we want to perform a write or read of
 the FIFO. It creates three outputs: @flag@, the full or empty flag, @addr@, the
 read or write address into the RAM, and @ptr@, the Gray-encoded version of the
-read or write address which will be synchronised between the two clock domains.
+read or write address which will be synchronized between the two clock domains.
 
 Next follow the initial states of address generators, and the flag generators
 for the empty and full flags:
@@ -1608,7 +1628,7 @@ isFull addrSize@SNat ptr s_ptr = case leTrans @1 @2 @addrSize of
 wptrFullInit        = (0,0,False)
 @
 
-We create a dual flip-flop synchroniser to be used to synchronise the
+We create a dual flip-flop synchronizer to be used to synchronize the
 Gray-encoded pointers between the two clock domains:
 
 @
@@ -1616,7 +1636,7 @@ ptrSync clk1 clk2 rst2 =
   'Clash.Explicit.Signal.register' clk2 rst2 0 . 'Clash.Explicit.Signal.register' clk2 rst2 0 . 'Clash.Explicit.Signal.unsafeSynchronizer' clk1 clk2
 @
 
-It uses the 'unsafeSynchroniser' primitive, which is needed to go from one clock
+It uses the 'unsafeSynchronizer' primitive, which is needed to go from one clock
 domain to the other. All synchronizers are specified in terms of
 'unsafeSynchronizer' (see for example the <src/Clash-Prelude-RAM.html#line-103 source of asyncRam>).
 The 'unsafeSynchronizer' primitive is turned into a (bundle of) wire(s) by the
@@ -1632,11 +1652,11 @@ asyncFIFOSynchronizer
   -- ^ Size of the internally used addresses, the  FIFO contains @2^addrSize@
   -- elements.
   -> 'Clock' wdomain wgated
-  -- ^ Clock to which the write port is synchronised
+  -- ^ Clock to which the write port is synchronized
   -> 'Clock' rdomain rgated
-  -- ^ Clock to which the read port is synchronised
-  -> 'Reset' wdomain synchronous
-  -> 'Reset' rdomain synchronous
+  -- ^ Clock to which the read port is synchronized
+  -> 'Reset' wdomain polarity
+  -> 'Reset' rdomain polarity
   -> Signal rdomain Bool
   -- ^ Read request
   -> Signal wdomain (Maybe a)
@@ -1659,7 +1679,7 @@ asyncFIFOSynchronizer addrSize\@SNat wclk rclk wrst rrst rinc wdataM =
                                  wptrFullInit (s_rptr,isJust \<$\> wdataM)
 @
 
-where we first specify the synchronisation of the read and the write pointers,
+where we first specify the synchronization of the read and the write pointers,
 instantiate the asynchronous RAM, and instantiate the read address \/ pointer \/
 flag generator and write address \/ pointer \/ flag generator.
 
@@ -1708,22 +1728,22 @@ isFull addrSize@SNat ptr s_ptr = case leTrans @1 @2 @addrSize of
 
 wptrFullInit        = (0,0,False)
 
--- Dual flip-flop synchroniser
+-- Dual flip-flop synchronizer
 ptrSync clk1 clk2 rst2 =
   'Clash.Explicit.Signal.register' clk2 rst2 0 . 'Clash.Explicit.Signal.register' clk2 rst2 0 . 'Clash.Explicit.Signal.unsafeSynchronizer' clk1 clk2
 
--- Async FIFO synchroniser
+-- Async FIFO synchronizer
 asyncFIFOSynchronizer
   :: (2 <= addrSize)
   => SNat addrSize
   -- ^ Size of the internally used addresses, the  FIFO contains @2^addrSize@
   -- elements.
   -> 'Clock' wdomain wgated
-  -- ^ Clock to which the write port is synchronised
+  -- ^ Clock to which the write port is synchronized
   -> 'Clock' rdomain rgated
-  -- ^ Clock to which the read port is synchronised
-  -> 'Reset' wdomain synchronous
-  -> 'Reset' rdomain synchronous
+  -- ^ Clock to which the read port is synchronized
+  -> 'Reset' wdomain polarity
+  -> 'Reset' rdomain polarity
   -> Signal rdomain Bool
   -- ^ Read request
   -> Signal wdomain (Maybe a)
@@ -1746,9 +1766,9 @@ asyncFIFOSynchronizer addrSize\@SNat wclk rclk wrst rrst rinc wdataM =
                                  wptrFullInit (s_rptr,isJust \<$\> wdataM)
 @
 
-== Instantiating a FIFO synchroniser
+== Instantiating a FIFO synchronizer
 
-Having finished our FIFO synchroniser it's time to instantiate with concrete
+Having finished our FIFO synchronizer it's time to instantiate with concrete
 clock domains. Let us assume we have part of our system connected to an ADC
 which runs at 20 MHz, and we have created an FFT component running at only 9
 MHz. We want to connect part of our design connected to the ADC, and running
@@ -1764,22 +1784,27 @@ We can calculate the clock periods using 'freqCalc':
 We can then create the clock and reset domains:
 
 @
-type DomADC = 'Dom \"ADC\" 50000
-type DomFFT = 'Dom \"FFT\" 111112
+instance KnownDomain "ADC" ('Domain "ADC" 10000 'Rising 'Asynchronous 'Defined 'ActiveHigh) where
+  knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
+  
+instance KnownDomain "FFT" ('Domain "FFT" 10000 'Rising 'Asynchronous 'Defined 'ActiveHigh) where
+  knownDomain tag = SDomain tag SNat SRising SAsynchronous SDefined
 @
 
-and subsequently a 256-space FIFO synchroniser that safely bridges the ADC clock
+and subsequently a 256-space FIFO synchronizer that safely bridges the ADC clock
 domain and to the FFT clock domain:
 
 @
 adcToFFT
-  :: Clock DomADC wgated
-  -> Clock DomFFT rgated
-  -> Reset DomADC synchronous
-  -> Reset DomFFT synchronous
-  -> Signal DomFFT Bool
-  -> Signal DomADC (Maybe (SFixed 8 8))
-  -> (Signal DomFFT (SFixed 8 8), Signal DomFFT Bool, Signal DomADC Bool)
+  :: Clock "DomADC" wgated
+  -> Clock "DomFFT" rgated
+  -> Reset "DomADC" polarity
+  -> Reset "DomFFT" polarity
+  -> Signal "DomFFT" Bool
+  -> Signal "DomADC" (Maybe (SFixed 8 8))
+  -> ( Signal "DomFFT" (SFixed 8 8)
+     , Signal "DomFFT" Bool
+     , Signal "DomADC" Bool )
 adcToFFT = asyncFIFOSynchronizer d8
 @
 
@@ -1787,7 +1812,7 @@ adcToFFT = asyncFIFOSynchronizer d8
 
 {- $conclusion
 For now, this is the end of this tutorial. We will be adding updates over time,
-so check back from time to time. For now, we recommend that you continue with
+so check back from time to time. We recommend that you continue with
 exploring the "Clash.Prelude" module, and get a better understanding of the
 capabilities of Clash in the process.
 -}
@@ -1795,8 +1820,8 @@ capabilities of Clash in the process.
 {- $errorsandsolutions
 A list of often encountered errors and their solutions:
 
-* __Type error: Couldn't match expected type @'Signal' (a,b)@ with actual type__
-  __@('Signal' a, 'Signal' b)@__:
+* __Type error: Couldn't match expected type @'Signal' tag (a,b)@ with actual type__
+  __@('Signal' tag a, 'Signal' tag b)@__:
 
     Signals of product types and product types (to which tuples belong) of
     signals are __isomorphic__ due to synchronisity principle, but are not
@@ -1818,8 +1843,8 @@ A list of often encountered errors and their solutions:
     * All tuples up to and including 62-tuples (GHC limit)
     * The 'Vec'tor type
 
-* __Type error: Couldn't match expected type @('Signal' domain a, 'Signal' domain b)@ with__
-  __ actual type @'Signal' domain (a,b)@__:
+* __Type error: Couldn't match expected type @('Signal' tag a, 'Signal' tag b)@ with__
+  __ actual type @'Signal' tag (a,b)@__:
 
     Product types (to which tuples belong) of signals and signals of product
     types are __isomorphic__ due to synchronicity principle, but are not
@@ -1939,8 +1964,8 @@ Here is a list of Haskell features for which the Clash compiler has only
     cannot synthesize recursively defined functions to circuits. However, when
     viewing your functions as a /structural/ specification of a circuit, this
     /feature/ of the Clash compiler makes sense. Also, only certain types of
-    recursion are considered non-synthesisable; recursively defined values are
-    for example synthesisable: they are (often) synthesized to feedback loops.
+    recursion are considered non-synthesizable; recursively defined values are
+    for example synthesizable: they are (often) synthesized to feedback loops.
 
     Let us distinguish between three variants of recursion:
 
@@ -1968,7 +1993,7 @@ Here is a list of Haskell features for which the Clash compiler has only
         In principal, descriptions like the above could be synthesized to a
         circuit, but it would have to be a /sequential/ circuit. Where the most
         general synthesis would then require a stack. Such a synthesis approach
-        is also known as /behavioural/ synthesis, something which the Clash
+        is also known as /behavioral/ synthesis, something which the Clash
         compiler simply does not do. One reason that Clash does not do this is
         because it does not fit the paradigm that only functions working on
         values of type 'Signal' result in sequential circuits, and all other
@@ -1990,10 +2015,10 @@ Here is a list of Haskell features for which the Clash compiler has only
 
         To get the first 10 numbers, we do the following:
 
-        >>> sampleN @Source @Asynchronous 11 fibS
+        >>> sampleN @System 11 fibS
         [0,0,1,1,2,3,5,8,13,21,34]
 
-        Unlike the @fibR@ function, the above @fibS@ function /is/ synthesisable
+        Unlike the @fibR@ function, the above @fibS@ function /is/ synthesizable
         by the Clash compiler. Where the recursively defined (non-function)
         value /r/ is synthesized to a feedback loop containing three registers
         and one adder.
@@ -2012,7 +2037,7 @@ Here is a list of Haskell features for which the Clash compiler has only
         @
 
         Where we can clearly see that 'lefts' and 'sorted' are defined in terms
-        of each other. Also the above @sortV@ function /is/ synthesisable.
+        of each other. Also the above @sortV@ function /is/ synthesizable.
 
     * __Static/Structure-dependent recursion__
 
@@ -2037,7 +2062,7 @@ Here is a list of Haskell features for which the Clash compiler has only
         @mapV@ four times, knowing that the @topEntity@ function applies @mapV@
         to a 'Vec' of length 4. Sadly, the compile-time evaluation mechanisms in
         the Clash compiler are very poor, and a user-defined function such as
-        the @mapV@ function defined above, is /currently/ not synthesisable.
+        the @mapV@ function defined above, is /currently/ not synthesizable.
         We /do/ plan to add support for this in the future. In the mean time,
         this poor support for user-defined recursive functions is amortized by
         the fact that the Clash compiler has built-in support for the
@@ -2281,16 +2306,16 @@ dotp :: SaturatingNum a
 dotp as bs = fold boundedPlus (zipWith boundedMult as bs)
 
 fir
-  :: (Default a, KnownNat n, SaturatingNum a, HiddenClockReset domain gated synchronous)
-  => Vec (n + 1) a -> Signal domain a -> Signal domain a
+  :: (Default a, KnownNat n, SaturatingNum a, HiddenClockReset tag enabled polarity dom)
+  => Vec (n + 1) a -> Signal tag a -> Signal tag a
 fir coeffs x_t = y_t
   where
     y_t = dotp coeffs \<$\> bundle xs
     xs  = window x_t
 
 topEntity
-  :: Clock  System Source
-  -> Reset  System Asynchronous
+  :: Clock  System Regular
+  -> Reset  System ActiveHigh
   -> Signal System (Signed 16)
   -> Signal System (Signed 16)
 topEntity = exposeClockReset (fir (2:>3:>(-2):>8:>Nil))
@@ -2368,8 +2393,8 @@ type Dom50 = Dom \"System\" 20000
     , t_output = PortName \"LED\"
     }) \#-\}
 topEntity
-  :: Clock Dom50 Source
-  -> Reset Dom50 Asynchronous
+  :: Clock Dom50 Regular
+  -> Reset Dom50 ActiveHigh
   -> Signal Dom50 Bit
   -> Signal Dom50 (BitVector 8)
 topEntity clk rst =

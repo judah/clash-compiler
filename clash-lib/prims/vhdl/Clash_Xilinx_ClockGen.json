@@ -4,9 +4,9 @@
     , "type"      :
 "clockWizard
   :: SSymbol name               -- ARG[0]
-  -> Clock  pllIn 'Source       -- ARG[1]
+  -> Clock  pllIn 'Regular       -- ARG[1]
   -> Reset  pllIn 'Asynchronous -- ARG[2]
-  -> (Clock pllOut 'Source, Signal pllOut Bool)"
+  -> (Clock pllOut, Signal pllOut Bool)"
     , "template" :
 "-- clockWizard begin
 ~GENSYM[clockWizard][0] : block
@@ -34,10 +34,10 @@ end block;
     , "type"      :
 "clockWizardDifferential
   :: SSymbol name              -- ARG[0]
-  -> Clock pllIn 'Source       -- ARG[1]
-  -> Clock pllIn 'Source       -- ARG[2]
-  -> Reset pllIn 'Asynchronous -- ARG[3]
-  -> (Clock pllOut 'Source, Signal pllOut Bool)"
+  -> Clock pllIn       -- ARG[1]
+  -> Clock pllIn       -- ARG[2]
+  -> Reset pllIn -- ARG[3]
+  -> (Clock pllOut, Signal pllOut Bool)"
     , "template" :
 "-- clockWizardDifferential begin
 ~GENSYM[clockWizardDifferential][0] : block

@@ -1,6 +1,7 @@
 {-|
 Copyright  :  (C) 2015-2016, University of Twente,
                   2017     , Google Inc.
+                  2019     , Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -18,7 +19,7 @@ ROMs
 {-# OPTIONS_HADDOCK show-extensions #-}
 
 module Clash.Explicit.ROM
-  ( -- * Synchronous ROM synchronised to an arbitrary clock
+  ( -- * Synchronous ROM synchronized to an arbitrary clock
     rom
   , romPow2
     -- * Internal
@@ -31,7 +32,7 @@ import GHC.Stack              (withFrozenCallStack)
 import GHC.TypeLits           (KnownNat, type (^))
 import Prelude hiding         (length)
 
-import Clash.Signal.Internal  (Clock (..), Signal (..))
+import Clash.Signal.Internal  (Clock (..), Signal (..), Enable, fromEnable)
 import Clash.Sized.Unsigned   (Unsigned)
 import Clash.Sized.Vector     (Vec, length, toList)
 import Clash.XException       (errorX, seqX)
@@ -47,12 +48,18 @@ import Clash.XException       (errorX, seqX)
 -- for ideas on how to use ROMs and RAMs
 romPow2
   :: KnownNat n
-  => Clock domain gated         -- ^ 'Clock' to synchronize to
-  -> Vec (2^n) a                -- ^ ROM content
-                                --
-                                -- __NB:__ must be a constant
-  -> Signal domain (Unsigned n) -- ^ Read address @rd@
-  -> Signal domain a            -- ^ The value of the ROM at address @rd@
+  => Clock tag
+  -- ^ 'Clock' to synchronize to
+  -> Enable tag
+  -- ^ Global enable
+  -> Vec (2^n) a
+  -- ^ ROM content
+  --
+  -- __NB:__ must be a constant
+  -> Signal tag (Unsigned n)
+  -- ^ Read address @rd@
+  -> Signal tag a
+  -- ^ The value of the ROM at address @rd@
 romPow2 = rom
 {-# INLINE romPow2 #-}
 
@@ -66,42 +73,47 @@ romPow2 = rom
 -- * See "Clash.Sized.Fixed#creatingdatafiles" and "Clash.Explicit.BlockRam#usingrams"
 -- for ideas on how to use ROMs and RAMs
 rom
-  :: (KnownNat n, Enum addr)
-  => Clock domain gated -- ^ 'Clock' to synchronize to
-  -> Vec n a            -- ^ ROM content
-                        --
-                        -- __NB:__ must be a constant
-  -> Signal domain addr -- ^ Read address @rd@
-  -> Signal domain a
+  :: ( KnownNat n, Enum addr)
+  => Clock tag
+  -- ^ 'Clock' to synchronize to
+  -> Enable tag
+  -- ^ Global enable
+  -> Vec n a
+  -- ^ ROM content
+  --
+  -- __NB:__ must be a constant
+  -> Signal tag addr
+  -- ^ Read address @rd@
+  -> Signal tag a
   -- ^ The value of the ROM at address @rd@ from the previous clock cycle
-rom = \clk content rd -> rom# clk content (fromEnum <$> rd)
+rom = \clk en content rd -> rom# clk en content (fromEnum <$> rd)
 {-# INLINE rom #-}
 
 -- | ROM primitive
 rom#
   :: KnownNat n
-  => Clock domain gated -- ^ 'Clock' to synchronize to
-  -> Vec n a            -- ^ ROM content
-                        --
-                        -- __NB:__ must be a constant
-  -> Signal domain Int  -- ^ Read address @rd@
-  -> Signal domain a
+  => Clock tag
+  -- ^ 'Clock' to synchronize to
+  -> Enable tag
+  -- ^ Global enable
+  -> Vec n a
+  -- ^ ROM content
+  --
+  -- __NB:__ must be a constant
+  -> Signal tag Int
+  -- ^ Read address @rd@
+  -> Signal tag a
   -- ^ The value of the ROM at address @rd@ from the previous clock cycle
-rom# clk content rd = go clk ((arr !) <$> rd)
-  where
-    szI = length content
-    arr = listArray (0,szI-1) (toList content)
+rom# _ en content rd =
+  go
+    (withFrozenCallStack (errorX "rom: initial value undefined"))
+    (fromEnable en)
+    ((arr !) <$> rd)
+ where
+  szI = length content
+  arr = listArray (0,szI-1) (toList content)
 
-    go :: Clock domain gated
-       -> Signal domain a
-       -> Signal domain a
-    go Clock {} =
-      \s -> withFrozenCallStack (errorX "rom: initial value undefined") :- s
-
-    go (GatedClock _ _ en) =
-      go' (withFrozenCallStack (errorX "rom: initial value undefined")) en
-
-    go' o (e :- es) as@(~(x :- xs)) =
-      -- See [Note: register strictness annotations]
-      o `seqX` o :- (as `seq` if e then go' x es xs else go' o es xs)
+  go o (e :- es) as@(~(x :- xs)) =
+    -- See [Note: register strictness annotations]
+    o `seqX` o :- (as `seq` if e then go x es xs else go o es xs)
 {-# NOINLINE rom# #-}

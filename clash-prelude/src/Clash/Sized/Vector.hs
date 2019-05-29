@@ -1549,7 +1549,7 @@ windows2d stY stX xss = map (transpose . (map (windows1d stX))) (windows1d stY x
 {-# INLINE windows2d #-}
 
 -- | Forward permutation specified by an index mapping, /ix/. The result vector
--- is initialised by the given defaults, /def/, and an further values that are
+-- is initialized by the given defaults, /def/, and an further values that are
 -- permuted into the result are added to the current value using the given
 -- combination function, /f/.
 --

@@ -1,6 +1,7 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
                   2017     , Google Inc.
+                  2019     , Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 -}
@@ -26,9 +27,10 @@ import GHC.TypeLits          (KnownNat)
 import Prelude               hiding ((!!), length)
 import System.IO.Unsafe      (unsafeDupablePerformIO)
 
+import Clash.Annotations.Primitive (hasBlackBox)
 import Clash.Explicit.Signal
-  (Clock, Reset, Signal, fromList, register, unbundle)
-import Clash.Signal          (mux)
+  (Clock, Reset, Signal, toEnable, fromList, register, unbundle)
+import Clash.Signal          (mux, KnownDomain, Reset(..))
 import Clash.Sized.Index     (Index)
 import Clash.Sized.Internal.BitVector
   (BitVector, isLike)
@@ -50,43 +52,48 @@ import Clash.XException      (ShowX (..), XException)
 --
 -- __NB__: This function /can/ be used in synthesizable designs.
 assert
-  :: (Eq a,ShowX a)
-  => Clock domain gated
-  -> Reset domain synchronous
-  -> String          -- ^ Additional message
-  -> Signal domain a -- ^ Checked value
-  -> Signal domain a -- ^ Expected value
-  -> Signal domain b -- ^ Return value
-  -> Signal domain b
-assert clk _rst msg checked expected returned =
+  :: (KnownDomain tag dom, Eq a, ShowX a)
+  => Clock tag
+  -> Reset tag
+  -> String
+  -- ^ Additional message
+  -> Signal tag a
+  -- ^ Checked value
+  -> Signal tag a
+  -- ^ Expected value
+  -> Signal tag b
+  -- ^ Return value
+  -> Signal tag b
+assert clk (Reset _ _) msg checked expected returned =
   (\c e cnt r ->
       if eqX c e
          then r
-         else trace (concat [ "\ncycle(" ++ show clk ++ "): "
-                            , show cnt
-                            , ", "
-                            , msg
-                            , "\nexpected value: "
-                            , showX e
-                            , ", not equal to actual value: "
-                            , showX c
+         else trace (concat [ "\nOn cycle ", show cnt, " of ", show clk, ", "
+                            , msg, " encountered an unexpected value:\n"
+                            , "  Expected: ", showX e, "\n"
+                            , "  Actual:   ", showX c
                             ]) r)
   <$> checked <*> expected <*> fromList [(0::Integer)..] <*> returned
   where
     eqX a b = unsafeDupablePerformIO (catch (evaluate (a == b))
                                             (\(_ :: XException) -> return False))
 {-# NOINLINE assert #-}
+{-# ANN assert hasBlackBox #-}
 
 -- | The same as 'assert', but can handle don't care bits in it's expected value.
 assertBitVector
-  :: (KnownNat n)
-  => Clock domain gated
-  -> Reset domain synchronous
-  -> String                      -- ^ Additional message
-  -> Signal domain (BitVector n) -- ^ Checked value
-  -> Signal domain (BitVector n) -- ^ Expected value
-  -> Signal domain b             -- ^ Return value
-  -> Signal domain b
+  :: (KnownDomain tag dom, KnownNat n)
+  => Clock tag
+  -> Reset tag
+  -> String
+  -- ^ Additional message
+  -> Signal tag (BitVector n)
+  -- ^ Checked value
+  -> Signal tag (BitVector n)
+  -- ^ Expected value
+  -> Signal tag b
+  -- ^ Return value
+  -> Signal tag b
 assertBitVector clk _rst msg checked expected returned =
   (\c e cnt r ->
       if eqX c e
@@ -105,6 +112,7 @@ assertBitVector clk _rst msg checked expected returned =
     eqX a b = unsafeDupablePerformIO (catch (evaluate (a `isLike` b))
                                             (\(_ :: XException) -> return False))
 {-# NOINLINE assertBitVector #-}
+{-# ANN assertBitVector hasBlackBox #-}
 
 
 
@@ -116,23 +124,28 @@ assertBitVector clk _rst msg checked expected returned =
 --
 -- @
 -- testInput
---   :: Clock domain gated -> Reset domain synchronous
---   -> 'Signal' domain Int
+--   :: KnownDomain tag dom
+--   => Clock tag
+--   -> Reset tag
+--   -> 'Signal' tag Int
 -- testInput clk rst = 'stimuliGenerator' clk rst $('Clash.Sized.Vector.listToVecTH' [(1::Int),3..21])
 -- @
 --
--- >>> sampleN 14 (testInput systemClockGen asyncResetGen)
+-- >>> sampleN 14 (testInput systemClockGen resetGen)
 -- [1,1,3,5,7,9,11,13,15,17,19,21,21,21]
 stimuliGenerator
-  :: forall l domain gated synchronous a
-   . KnownNat l
-  => Clock domain gated
+  :: forall l tag dom  a
+   . ( KnownNat l
+     , KnownDomain tag dom )
+  => Clock tag
   -- ^ Clock to which to synchronize the output signal
-  -> Reset domain synchronous
-  -> Vec l a        -- ^ Samples to generate
-  -> Signal domain a  -- ^ Signal of given samples
+  -> Reset tag
+  -> Vec l a
+  -- ^ Samples to generate
+  -> Signal tag a
+  -- ^ Signal of given samples
 stimuliGenerator clk rst samples =
-    let (r,o) = unbundle (genT <$> register clk rst 0 r)
+    let (r,o) = unbundle (genT <$> register clk rst (toEnable (pure True)) 0 r)
     in  o
   where
     genT :: Index l -> (Index l,a)
@@ -153,50 +166,64 @@ stimuliGenerator clk rst samples =
 --
 -- @
 -- expectedOutput
---   :: Clock domain gated -> Reset domain synchronous
---   -> 'Signal' domain Int -> 'Signal' domain Bool
+--   :: Clock tag -> Reset tag
+--   -> 'Signal' tag Int -> 'Signal' tag Bool
 -- expectedOutput clk rst = 'outputVerifier' clk rst $('Clash.Sized.Vector.listToVecTH' ([70,99,2,3,4,5,7,8,9,10]::[Int]))
 -- @
 --
 -- >>> import qualified Data.List as List
--- >>> sampleN 12 (expectedOutput systemClockGen asyncResetGen (fromList (0:[0..10] List.++ [10,10,10])))
+-- >>> sampleN 12 (expectedOutput systemClockGen resetGen (fromList (0:[0..10] List.++ [10,10,10])))
 -- <BLANKLINE>
--- cycle(system10000): 0, outputVerifier
--- expected value: 70, not equal to actual value: 0
+-- On cycle 0 of <Clock: System>, outputVerifier encountered an unexpected value:
+--   Expected: 70
+--   Actual:   0
 -- [False
--- cycle(system10000): 1, outputVerifier
--- expected value: 70, not equal to actual value: 0
+-- On cycle 1 of <Clock: System>, outputVerifier encountered an unexpected value:
+--   Expected: 70
+--   Actual:   0
 -- ,False
--- cycle(system10000): 2, outputVerifier
--- expected value: 99, not equal to actual value: 1
+-- On cycle 2 of <Clock: System>, outputVerifier encountered an unexpected value:
+--   Expected: 99
+--   Actual:   1
 -- ,False,False,False,False,False
--- cycle(system10000): 7, outputVerifier
--- expected value: 7, not equal to actual value: 6
+-- On cycle 7 of <Clock: System>, outputVerifier encountered an unexpected value:
+--   Expected: 7
+--   Actual:   6
 -- ,False
--- cycle(system10000): 8, outputVerifier
--- expected value: 8, not equal to actual value: 7
+-- On cycle 8 of <Clock: System>, outputVerifier encountered an unexpected value:
+--   Expected: 8
+--   Actual:   7
 -- ,False
--- cycle(system10000): 9, outputVerifier
--- expected value: 9, not equal to actual value: 8
+-- On cycle 9 of <Clock: System>, outputVerifier encountered an unexpected value:
+--   Expected: 9
+--   Actual:   8
 -- ,False
--- cycle(system10000): 10, outputVerifier
--- expected value: 10, not equal to actual value: 9
+-- On cycle 10 of <Clock: System>, outputVerifier encountered an unexpected value:
+--   Expected: 10
+--   Actual:   9
 -- ,False,True]
 --
 -- If your working with 'BitVector's containing don't care bit you should use 'outputVerifierBitVector'.
 outputVerifier
-  :: forall l domain gated synchronous a
-   . (KnownNat l, Eq a, ShowX a)
-  => Clock domain gated
+  :: forall l tag dom  a
+   . ( KnownNat l
+     , KnownDomain tag dom
+     , Eq a
+     , ShowX a )
+  => Clock tag
   -- ^ Clock to which the input signal is synchronized to
-  -> Reset domain synchronous
-  -> Vec l a          -- ^ Samples to compare with
-  -> Signal domain a    -- ^ Signal to verify
-  -> Signal domain Bool -- ^ Indicator that all samples are verified
+  -> Reset tag
+  -> Vec l a
+  -- ^ Samples to compare with
+  -> Signal tag a
+  -- ^ Signal to verify
+  -> Signal tag Bool
+  -- ^ Indicator that all samples are verified
 outputVerifier clk rst samples i =
-    let (s,o) = unbundle (genT <$> register clk rst 0 s)
+    let en    = toEnable (pure True)
+        (s,o) = unbundle (genT <$> register clk rst en 0 s)
         (e,f) = unbundle o
-        f'    = register clk rst False f
+        f'    = register clk rst en False f
         -- Only assert while not finished
     in  mux f' f' $ assert clk rst "outputVerifier" i e f'
   where
@@ -212,21 +239,28 @@ outputVerifier clk rst samples i =
         finished = s == maxI
 {-# INLINABLE outputVerifier #-}
 
--- | Same as 'outputVerifier',
--- but can handle don't care bits in it's expected values.
+-- | Same as 'outputVerifier', but can handle don't care bits in it's expected
+-- values.
 outputVerifierBitVector
-  :: forall l n domain gated synchronous
-   . (KnownNat l, KnownNat n)
-  => Clock domain gated
+  :: forall l n tag dom
+   . ( KnownNat l
+     , KnownNat n
+     , KnownDomain tag dom
+     )
+  => Clock tag
   -- ^ Clock to which the input signal is synchronized to
-  -> Reset domain synchronous
-  -> Vec l (BitVector n)         -- ^ Samples to compare with
-  -> Signal domain (BitVector n) -- ^ Signal to verify
-  -> Signal domain Bool          -- ^ Indicator that all samples are verified
+  -> Reset tag
+  -> Vec l (BitVector n)
+  -- ^ Samples to compare with
+  -> Signal tag (BitVector n)
+  -- ^ Signal to verify
+  -> Signal tag Bool
+  -- ^ Indicator that all samples are verified
 outputVerifierBitVector clk rst samples i =
-    let (s,o) = unbundle (genT <$> register clk rst 0 s)
+    let en    = toEnable (pure True)
+        (s,o) = unbundle (genT <$> register clk rst en 0 s)
         (e,f) = unbundle o
-        f'    = register clk rst False f
+        f'    = register clk rst en False f
         -- Only assert while not finished
     in  mux f' f' $ assertBitVector clk rst "outputVerifierBitVector" i e f'
   where

@@ -178,8 +178,8 @@ runClashTest =
       , clashTestGroup "Numbers"
         [ runTest ("tests" </> "shouldwork" </> "Numbers") defBuild [] "Bounds"       (["","Bounds_testBench"],"Bounds_testBench",True)
         -- TODO: re-enable for Verilog
-        , runTest ("tests" </> "shouldwork" </> "Numbers") [VHDL] ["-itests/shouldwork/Numbers","-fclash-inline-limit=300"] "NumConstantFoldingTB"       (["","NumConstantFoldingTB_testBench"],"NumConstantFoldingTB_testBench",True)
-        , outputTest ("tests" </> "shouldwork" </> "Numbers") defBuild ["-fclash-inline-limit=300"] "NumConstantFolding"  "main"
+--        , runTest ("tests" </> "shouldwork" </> "Numbers") [VHDL] ["-itests/shouldwork/Numbers","-fclash-inline-limit=300"] "NumConstantFoldingTB"       (["","NumConstantFoldingTB_testBench"],"NumConstantFoldingTB_testBench",True)
+--        , outputTest ("tests" </> "shouldwork" </> "Numbers") defBuild ["-fclash-inline-limit=300"] "NumConstantFolding"  "main"
 #if MIN_VERSION_base(4,12,0)
         -- Naturals are broken on GHC <= 8.4. See https://github.com/clash-lang/clash-compiler/pull/473
         , runTest ("tests" </> "shouldwork" </> "Numbers") defBuild [] "Naturals"     (["","Naturals_testBench"],"Naturals_testBench",True)
@@ -219,8 +219,6 @@ runClashTest =
         [ runTest ("tests" </> "shouldwork" </> "Signal") defBuild [] "AlwaysHigh"      ([""],"AlwaysHigh_topEntity",False)
         , outputTest ("tests" </> "shouldwork" </> "Signal") defBuild [] "BlockRamLazy"    "main"
         , runTest ("tests" </> "shouldwork" </> "Signal") defBuild [] "BlockRamFile"    (["","BlockRamFile_testBench"],"BlockRamFile_testBench",True)
-        , runTest ("tests" </> "shouldwork" </> "Signal") defBuild ["-fclash-no-prim-warn"] "GatedClock" (["gated","source","testbench"],"testbench",True)
-        , runTest ("tests" </> "shouldwork" </> "Signal") defBuild [] "GatedClockWidth"                  (["","GatedClockWidth_testBench"],"GatedClockWidth_testBench",True)
         , runTest ("tests" </> "shouldwork" </> "Signal") defBuild [] "BlockRamTest"    ([""],"BlockRamTest_topEntity",False)
         , runTest ("tests" </> "shouldwork" </> "Signal") defBuild [] "DelayedReset"    (["","DelayedReset_testBench"],"DelayedReset_testBench",True)
         , runTest ("tests" </> "shouldwork" </> "Signal") defBuild [] "NoCPR"           (["example"],"example",False)

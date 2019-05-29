@@ -97,12 +97,14 @@ warn opts msg = do
 
 -- | Generate the context for a BlackBox instantiation.
 mkBlackBoxContext
-  :: Id
+  :: TextS.Text
+  -- ^ Blackbox function name
+  -> Id
   -- ^ Identifier binding the primitive/blackbox application
   -> [Term]
   -- ^ Arguments of the primitive/blackbox application
   -> NetlistMonad (BlackBoxContext,[Declaration])
-mkBlackBoxContext resId args = do
+mkBlackBoxContext bbName resId args = do
     -- Make context inputs
     tcm             <- Lens.use tcCache
     let resNm = nameOcc (varName resId)
@@ -116,7 +118,7 @@ mkBlackBoxContext resId args = do
     lvl <- Lens.use curBBlvl
     (nm,_) <- Lens.use curCompNm
 
-    return ( Context (res,resTy) imps funs [] lvl nm
+    return ( Context bbName (res,resTy) imps funs [] lvl nm
            , concat impDecls ++ concat funDecls
            )
   where
@@ -305,7 +307,7 @@ mkPrimitive bbEParen bbEasD dst nm args ty =
               resM <- resBndr True wr' dst
               case resM of
                 Just (dst',dstNm,dstDecl) -> do
-                  (bbCtx,ctxDcls)   <- mkBlackBoxContext dst' (lefts args)
+                  (bbCtx,ctxDcls)   <- mkBlackBoxContext nm dst' (lefts args)
                   (templ,templDecl) <- prepareBlackBox pNm tempD bbCtx
                   let bbDecl = N.BlackBoxD pNm (libraries p) (imports p)
                                            (includes p) templ bbCtx
@@ -319,7 +321,7 @@ mkPrimitive bbEParen bbEasD dst nm args ty =
                   resM <- resBndr True Wire dst
                   case resM of
                     Just (dst',dstNm,dstDecl) -> do
-                      (bbCtx,ctxDcls)     <- mkBlackBoxContext dst' (lefts args)
+                      (bbCtx,ctxDcls)     <- mkBlackBoxContext nm dst' (lefts args)
                       (bbTempl,templDecl) <- prepareBlackBox pNm tempE bbCtx
                       let tmpAssgn = Assignment dstNm
                                         (BlackBoxE pNm (libraries p) (imports p)
@@ -331,7 +333,7 @@ mkPrimitive bbEParen bbEasD dst nm args ty =
                   resM <- resBndr False Wire dst
                   case resM of
                     Just (dst',_,_) -> do
-                      (bbCtx,ctxDcls)      <- mkBlackBoxContext dst' (lefts args)
+                      (bbCtx,ctxDcls)      <- mkBlackBoxContext nm dst' (lefts args)
                       (bbTempl,templDecl0) <- prepareBlackBox pNm tempE bbCtx
                       let templDecl1 = case nm of
                             "Clash.Sized.Internal.BitVector.fromInteger#"
@@ -390,7 +392,7 @@ mkPrimitive bbEParen bbEasD dst nm args ty =
           | otherwise ->
               return (BlackBoxE "" [] [] []
                         (BBTemplate [Text $ mconcat ["NO_TRANSLATION_FOR:",fromStrict pNm]])
-                        emptyBBContext False,[])
+                        (emptyBBContext pNm) False,[])
 
     resBndr
       :: Bool
@@ -439,7 +441,7 @@ mkFunInput resId e = do
   -- TODO: Rewrite this function to use blackbox functions. Right now it
   -- TODO: generates strings that are later parsed/interpreted again. Silly!
   let (appE,args) = collectArgs e
-  (bbCtx,dcls) <- mkBlackBoxContext resId (lefts args)
+  (bbCtx,dcls) <- mkBlackBoxContext "__INTERNAL__" resId (lefts args)
   templ <- case appE of
             Prim nm _ -> do
               bb  <- extractPrimWarnOrFail nm

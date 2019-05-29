@@ -1,6 +1,6 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
-                  2016     , Myrtle Software Ltd
+                  2016-2019, Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 -}
@@ -81,7 +81,7 @@ module Clash.Sized.Internal.BitVector
   , ge#
   , gt#
   , le#
-    -- *** Enum (not synthesisable)
+    -- *** Enum (not synthesizable)
   , enumFrom#
   , enumFromThen#
   , enumFromTo#
@@ -169,7 +169,7 @@ import                qualified Data.List                  as L
 -- * 'Num' instance performs /unsigned/ arithmetic.
 data BitVector (n :: Nat) =
     -- | The constructor, 'BV', and  the field, 'unsafeToInteger', are not
-    -- synthesisable.
+    -- synthesizable.
     BV { unsafeMask      :: !Integer
        , unsafeToInteger :: !Integer
        }
@@ -180,7 +180,7 @@ data BitVector (n :: Nat) =
 -- | Bit
 data Bit =
   -- | The constructor, 'Bit', and  the field, 'unsafeToInteger#', are not
-  -- synthesisable.
+  -- synthesizable.
   Bit { unsafeMask#      :: !Integer
       , unsafeToInteger# :: !Integer
       }
@@ -444,7 +444,7 @@ le# (BV 0 n) (BV 0 m) = n <= m
 le#  bv1 bv2 = undefErrorI "<=" bv1 bv2
 
 -- | The functions: 'enumFrom', 'enumFromThen', 'enumFromTo', and
--- 'enumFromThenTo', are not synthesisable.
+-- 'enumFromThenTo', are not synthesizable.
 instance KnownNat n => Enum (BitVector n) where
   succ           = (+# fromInteger# 0 1)
   pred           = (-# fromInteger# 0 1)
@@ -729,8 +729,12 @@ replaceBit# bv@(BV m v) i (Bit mb b)
                           ]
 
 {-# NOINLINE setSlice# #-}
-setSlice# :: BitVector (m + 1 + i) -> SNat m -> SNat n -> BitVector (m + 1 - n)
-          -> BitVector (m + 1 + i)
+setSlice#
+  :: BitVector (m + 1 + i)
+  -> SNat m
+  -> SNat n
+  -> BitVector (m + 1 - n)
+  -> BitVector (m + 1 + i)
 setSlice# (BV iMask i) m n (BV jMask j) = BV ((iMask .&. mask) .|. jMask')
                                              ((i     .&. mask) .|. j')
   where
@@ -742,8 +746,11 @@ setSlice# (BV iMask i) m n (BV jMask j) = BV ((iMask .&. mask) .|. jMask')
     mask = complement ((2 ^ (m' + 1) - 1) `xor` (2 ^ n' - 1))
 
 {-# NOINLINE split# #-}
-split# :: forall n m . KnownNat n
-       => BitVector (m + n) -> (BitVector m, BitVector n)
+split#
+  :: forall n m
+   . KnownNat n
+  => BitVector (m + n)
+  -> (BitVector m, BitVector n)
 split# (BV m i) = (BV lMask l, BV rMask r)
   where
     n     = fromInteger (natVal (Proxy @n))
@@ -971,7 +978,7 @@ undefined# =
 -- >>> expected `isLike` checked
 -- False
 --
--- __NB__: Not synthesisable
+-- __NB__: Not synthesizable
 isLike :: BitVector n -> BitVector n -> Bool
 isLike (BV cMask c) (BV eMask e) = e' == c' && e' == c''
   where

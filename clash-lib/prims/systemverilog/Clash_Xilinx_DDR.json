@@ -7,8 +7,8 @@
      , fast ~ Dom n pFast         -- ARG[1]
      , slow ~ Dom n (2*pFast)     -- ARG[2]
      , KnownNat m )               -- ARG[3]
-  -> Clock slow gated             -- ARG[4]
-  -> Reset slow synchronous       -- ARG[5]
+  -> Clock slow             -- ARG[4]
+  -> Reset slow       -- ARG[5]
   -> Signal fast (BitVector m)    -- ARG[6]
   -> Signal slow (BitVector m,BitVector m)"
     , "template" :
@@ -28,7 +28,7 @@ for (~SYM[8]=0; ~SYM[8] < ~SIZE[~TYP[6]]; ~SYM[8]=~SYM[8]+1) begin : ~GENSYM[ddr
     .SRTYPE(~IF ~ISSYNC[5] ~THEN \"SYNC\" ~ELSE \"ASYNC\" ~FI)
   ) ~GENSYM[~COMPNAME_IDDR][9] (
     .Q1(~SYM[1][~SYM[8]]),
-    .Q2(~SYM[2][~SYM[8]]),~IF ~ISGATED[6] ~THEN
+    .Q2(~SYM[2][~SYM[8]]),~IF ~ISENABLED[6] ~THEN
     .C(~ARG[4][1]),
     .CE(~ARG[4][0]),~ELSE
     .C(~ARG[4]),
@@ -52,8 +52,8 @@ assign ~RESULT = {~SYM[2],~SYM[1]};
   :: ( slow ~ Dom n (2*pFast)           -- ARG[0]
      , fast ~ Dom n pFast               -- ARG[1]
      , KnownNat m )                     -- ARG[2]
-  => Clock slow gated                   -- ARG[3]
-  -> Reset slow synchronous             -- ARG[4]
+  => Clock slow                   -- ARG[3]
+  -> Reset slow             -- ARG[4]
   -> Signal slow (BitVector m)          -- ARG[5]
   -> Signal slow (BitVector m)          -- ARG[6]
   -> Signal fast (BitVector m)"
@@ -74,7 +74,7 @@ for (~SYM[8]=0; ~SYM[8] < ~SIZE[~TYP[6]]; ~SYM[8]=~SYM[8]+1) begin : ~GENSYM[ddr
     .INIT(1'b0),
     .SRTYPE(~IF ~ISSYNC[4] ~THEN \"SYNC\" ~ELSE \"ASYNC\" ~FI)
   ) ~GENSYM[~COMPNAME_ODDR][9] (
-    .Q(~SYM[3][~SYM[8]]),~IF ~ISGATED[3] ~THEN
+    .Q(~SYM[3][~SYM[8]]),~IF ~ISENABLED[3] ~THEN
     .C(~ARG[3][1]),
     .CE(~ARG[3][0]),~ELSE
     .C(~ARG[3]),

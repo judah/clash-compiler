@@ -3,21 +3,23 @@
     , "kind" : "Declaration"
     , "type" :
 "delay#
-  :: Undefined a              -- ARG[0]
-  => Clock domain gated       -- ARG[1]
-  -> a                        -- ARG[2]
-  -> Signal clk a             -- ARG[3]
+  :: ( KnownDomain tag dom   -- ARG[0]
+     , Undefined a )          -- ARG[1]
+  => Clock tag                -- ARG[2]
+  -> Enable tag               -- ARG[3]
+  -> a                        -- ARG[4]
+  -> Signal clk a             -- ARG[5]
   -> Signal clk a"
     , "template" :
 "// delay begin,
-reg ~TYPO ~GENSYM[~RESULT_reg][0] = ~CONST[2];~IF ~ISGATED[1] ~THEN
-always @(posedge ~ARG[1][1]) begin : ~GENSYM[~RESULT_delay][1]
-  if (~ARG[1][0]) begin
-    ~SYM[0] <= ~ARG[3];
+reg ~TYPO ~GENSYM[~RESULT_reg][0] = ~CONST[4];~IF ~ISENABLED[3] ~THEN
+always @(posedge ~ARG[2]) begin : ~GENSYM[~RESULT_delay][1]
+  if (~ARG[3]) begin
+    ~SYM[0] <= ~ARG[5];
   end
 end~ELSE
-always @(posedge ~ARG[1]) begin : ~SYM[1]
-  ~SYM[0] <= ~ARG[3];
+always @(posedge ~ARG[2]) begin : ~SYM[1]
+  ~SYM[0] <= ~ARG[5];
 end~FI
 assign ~RESULT = ~SYM[0];
 // delay end"
@@ -28,30 +30,25 @@ assign ~RESULT = ~SYM[0];
     , "kind" : "Declaration"
     , "type" :
 "register#
-  :: Undefined a              -- ARG[0]
-  => Clock domain gated       -- ARG[1]
-  -> Reset domain synchronous -- ARG[2]
-  -> a                        -- ARG[3] (powerup value)
-  -> a                        -- ARG[4] (reset value)
-  -> Signal clk a             -- ARG[5]
+  :: ( KnownDomain tag dom    -- ARG[0]
+     , Undefined a )          -- ARG[1]
+  => Clock tag                -- ARG[2]
+  -> Reset tag                -- ARG[3]
+  -> Enable tag               -- ARG[4]
+  -> a                        -- ARG[5] (powerup value)
+  -> a                        -- ARG[6] (reset value)
+  -> Signal clk a             -- ARG[7]
   -> Signal clk a"
     , "template" :
 "// register begin
-reg ~TYPO ~GENSYM[~RESULT_reg][0] = ~CONST[3];~IF ~ISGATED[1] ~THEN
-always @(posedge ~ARG[1][1]~IF ~ISSYNC[2] ~THEN ~ELSE or posedge ~ARG[2]~FI) begin : ~GENSYM[~RESULT_register][1]
-  if (~ARG[2]) begin
-    ~SYM[0] <= ~CONST[4];
-  end else if (~ARG[1][0]) begin
-    ~SYM[0] <= ~ARG[5];
+reg ~TYPO ~GENSYM[~RESULT_reg][0] = ~CONST[5];
+always @(posedge ~ARG[2]~IF ~ISSYNC[0] ~THEN ~ELSE or posedge ~ARG[3]~FI) begin : ~GENSYM[~RESULT_register][1]
+  if (~ARG[3]) begin
+    ~SYM[0] <= ~CONST[6];
+  end else ~IF ~ISENABLED[4] ~THEN if (~ARG[4]) ~ELSE ~FI begin
+    ~SYM[0] <= ~ARG[7];
   end
-end~ELSE
-always @(posedge ~ARG[1]~IF ~ISSYNC[2] ~THEN ~ELSE or posedge ~ARG[2]~FI) begin : ~SYM[1]
-  if (~ARG[2]) begin
-    ~SYM[0] <= ~CONST[4];
-  end else begin
-    ~SYM[0] <= ~ARG[5];
-  end
-end~FI
+end
 assign ~RESULT = ~SYM[0];
 // register end"
     }
@@ -62,15 +59,13 @@ assign ~RESULT = ~SYM[0];
     , "warning" : "Clash.Signal.Internal.clockGen is not synthesizable!"
     , "type" :
 "clockGen
-  :: (domain ~ Dom nm period -- ARG[0]
-     ,KnownSymbol nm         -- ARG[1]
-     ,KnownNat period)       -- ARG[2]
-  => Clock domain Source"
+  :: KnownDomain tag dom -- ARG[0]
+  => Clock tag"
     , "template" :
 "// pragma translate_off
 reg ~TYPO ~GENSYM[clk][0];
 // 1 = 0.1ps
-localparam ~GENSYM[half_period][1] = (~LIT[2]0 / 2);
+localparam ~GENSYM[half_period][1] = (~PERIOD[0]0 / 2);
 always begin
   ~SYM[0] = 0;
   #3000 forever begin
@@ -90,20 +85,18 @@ assign ~RESULT = ~SYM[0];
     , "warning" : "Clash.Signal.Internal.tbClockGen is not synthesizable!"
     , "type" :
 "tbClockGen
-  :: (domain ~ Dom nm period -- ARG[0]
-     ,KnownSymbol nm         -- ARG[1]
-     ,KnownNat period)       -- ARG[2]
-  => Signal domain Bool      -- ARG[3]
-  -> Clock domain Source"
+  :: KnownDomain tag dom -- ARG[0]
+  => Signal tag Bool      -- ARG[1]
+  -> Clock tag"
     , "template" :
 "// pragma translate_off
 reg ~TYPO ~GENSYM[clk][0];
 // 1 = 0.1ps
-localparam ~GENSYM[half_period][1] = (~LIT[2]0 / 2);
+localparam ~GENSYM[half_period][1] = (~PERIOD[0]0 / 2);
 always begin
   ~SYM[0] = 0;
   #3000 forever begin
-    if (~ ~ARG[3]) begin
+    if (~ ~ARG[1]) begin
       $finish;
     end
     ~SYM[0] = ~ ~SYM[0];
@@ -117,35 +110,28 @@ assign ~RESULT = ~SYM[0];
     }
   }
 , { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.asyncResetGen"
+    { "name"      : "Clash.Signal.Internal.resetGen"
     , "kind" : "Declaration"
     , "type" :
-"asyncResetGen :: Reset domain 'Asynchronous"
+"resetGen :: KnownDomain tag dom => Reset tag"
     , "template" :
 "// pragma translate_off
+~IF~ISSYNC[0]~THEN
 reg ~TYPO ~GENSYM[rst][0];
-initial begin
-  #1    ~SYM[0] = 1;
-  #3001 ~SYM[0] = 0;
-end
-assign ~RESULT = ~SYM[0];
-// pragma translate_on"
-    }
-  }
-, { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.syncResetGen"
-    , "kind" : "Declaration"
-    , "type" :
-"asyncResetGen :: Reset domain 'Synchronous"
-    , "template" :
-"// pragma translate_off
-reg ~TYPO ~GENSYM[rst][0];
-localparam ~GENSYM[reset_period][1] = 2998 + ~LIT[1]0;
+localparam ~GENSYM[reset_period][1] = 2998 + ~PERIOD[0]0;
 initial begin
   #1 ~SYM[0] = 1;
   #~SYM[1] ~SYM[0] = 0;
 end
 assign ~RESULT = ~SYM[0];
+~ELSE
+reg ~TYPO ~SYM[0];
+initial begin
+  #1    ~SYM[0] = 1;
+  #3001 ~SYM[0] = 0;
+end
+assign ~RESULT = ~SYM[0];
+~FI
 // pragma translate_on"
     }
   }

@@ -1,48 +1,32 @@
 [ { "BlackBox" :
-    { "name" : "Clash.Signal.Internal.clockGate"
+    { "name" : "Clash.Signal.Internal.toEnabledClock"
     , "kind" : "Declaration"
     , "type" :
-"clockGate
-  :: Clock domain gated -- ARG[0]
-  -> Signal domain Bool -- ARG[1]
-  -> Clock domain 'Gated"
+"toEnabledClock
+  :: Clock tag -- ARG[0]
+  -> Signal tag Bool -- ARG[1]
+  -> Clock tag"
     , "template" :
-"// clockGate begin~IF ~ISGATED[0] ~THEN
+"// toEnabledClock begin~IF ~ISENABLED[0] ~THEN
 assign ~RESULT = {~ARG[0][1],~ARG[0][0] & ~ARG[1]};~ELSE
 assign ~RESULT = {~ARG[0],~ARG[1]};~FI
-// clockGate end"
+// toEnabledClock end"
     }
   }
 , { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.unsafeFromAsyncReset"
+    { "name"      : "Clash.Signal.Internal.unsafeFromReset"
     , "kind" : "Expression"
     , "type" :
-"unsafeFromAsyncReset :: Reset domain Asynchronous -> Signal domain Bool"
+"unsafeFromReset :: Reset tag -> Signal tag Bool"
     , "template" : "~ARG[0]"
     }
   }
 , { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.unsafeToAsyncReset"
+    { "name"      : "Clash.Signal.Internal.unsafeToReset"
     , "kind" : "Expression"
     , "type" :
-"unsafeToAsyncReset :: Signal domain Bool -> Reset domain Asynchronous"
-    , "template" : "~ARG[0]"
-    }
-  }
-, { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.fromSyncReset"
-    , "kind" : "Expression"
-    , "type" :
-"fromSyncReset :: Reset domain Synchronous -> Signal domain Bool"
-    , "template" : "~ARG[0]"
-    }
-  }
-, { "BlackBox" :
-    { "name"      : "Clash.Signal.Internal.unsafeToSyncReset"
-    , "kind" : "Expression"
-    , "type" :
-"unsafeToSyncReset :: Signal domain Bool -> Reset domain Synchronous"
-    , "template" : "~ARG[0]"
+"unsafeToReset :: KnownDomain tag dom => Signal tag Bool -> Reset tag"
+    , "template" : "~ARG[1]"
     }
   }
 ]

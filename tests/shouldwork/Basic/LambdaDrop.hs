@@ -11,20 +11,20 @@ topEntity = (++#) <$> (pack <$> outport1) <*> (pack <$> outport2)
 
     req = core $ (<|>) <$> ramResp <*> ((<|>) <$> outResp1 <*> outResp2)
 
-core :: Signal domain (Maybe Bit) -> Signal domain Bit
+core :: Signal tag (Maybe Bit) -> Signal tag Bit
 core = fmap (maybe low id)
 {-# NOINLINE core #-}
 
-ram :: Signal domain Bit -> Signal domain (Maybe Bit)
+ram :: Signal tag Bit -> Signal tag (Maybe Bit)
 ram = fmap pure
 {-# NOINLINE ram #-}
 
-decodeReq :: Integer -> Signal domain Bit -> Signal domain Bit
+decodeReq :: Integer -> Signal tag Bit -> Signal tag Bit
 decodeReq 0 = fmap (const low)
 decodeReq 1 = id
 decodeReq _ = fmap complement
 {-# NOINLINE decodeReq #-}
 
-gpio :: Signal domain Bit -> (Signal domain Bit,Signal domain (Maybe Bit))
+gpio :: Signal tag Bit -> (Signal tag Bit,Signal tag (Maybe Bit))
 gpio i = (i,pure <$> i)
 {-# NOINLINE gpio #-}

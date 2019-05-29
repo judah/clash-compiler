@@ -1,6 +1,7 @@
 {-|
   Copyright   :  (C) 2013-2016, University of Twente,
-                     2017     , Myrtle Software Ltd, Google Inc.
+                     2017-2019, Myrtle Software Ltd
+                     2017     , Google Inc.
   License     :  BSD2 (see the file LICENSE)
   Maintainer  :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
@@ -53,7 +54,7 @@ module Clash.Prelude
   , asyncRomPow2
   , rom
   , romPow2
-    -- ** ROMs initialised with a data file
+    -- ** ROMs initialized with a data file
   , asyncRomFile
   , asyncRomFilePow2
   , romFile
@@ -64,7 +65,7 @@ module Clash.Prelude
     -- * BlockRAM primitives
   , blockRam
   , blockRamPow2
-    -- ** BlockRAM primitives initialised with a data file
+    -- ** BlockRAM primitives initialized with a data file
   , blockRamFile
   , blockRamFilePow2
     -- ** BlockRAM read/write conflict resolution
@@ -185,9 +186,9 @@ import           Clash.Signal.Trace
 import           Clash.XException
 
 {- $setup
->>> :set -XDataKinds -XFlexibleContexts
->>> let window4  = window  :: HiddenClockReset domain gated synchronous => Signal domain Int -> Vec 4 (Signal domain Int)
->>> let windowD3 = windowD :: HiddenClockReset domain gated synchronous => Signal domain Int -> Vec 3 (Signal domain Int)
+>>> :set -XDataKinds -XFlexibleContexts -XTypeApplications
+>>> let window4  = window  :: HiddenClockResetEnable tag dom => Signal tag Int -> Vec 4 (Signal tag Int)
+>>> let windowD3 = windowD :: HiddenClockResetEnable tag dom => Signal tag Int -> Vec 3 (Signal tag Int)
 -}
 
 {- $hiding
@@ -203,38 +204,44 @@ It instead exports the identically named functions defined in terms of
 
 -- | Give a window over a 'Signal'
 --
--- > window4 :: HiddenClockReset domain gated synchronous
--- >         => Signal domain Int -> Vec 4 (Signal domain Int)
+-- > window4 :: HiddenClockResetEnable tag dom
+-- >         => Signal tag Int -> Vec 4 (Signal tag Int)
 -- > window4 = window
 --
--- >>> simulateB window4 [1::Int,2,3,4,5] :: [Vec 4 Int]
+-- >>> simulateB @System window4 [1::Int,2,3,4,5] :: [Vec 4 Int]
 -- [<1,0,0,0>,<2,1,0,0>,<3,2,1,0>,<4,3,2,1>,<5,4,3,2>...
 -- ...
 window
-  :: ( HiddenClockReset domain gated synchronous
+  :: ( HiddenClockResetEnable tag dom
      , KnownNat n
      , Default a
      , Undefined a )
-  => Signal domain a                -- ^ Signal to create a window over
-  -> Vec (n + 1) (Signal domain a)  -- ^ Window of at least size 1
-window = hideClockReset E.window
+  => Signal tag a
+  -- ^ Signal to create a window over
+  -> Vec (n + 1) (Signal tag a)
+  -- ^ Window of at least size 1
+window = hideClockResetEnable E.window
 {-# INLINE window #-}
 
 -- | Give a delayed window over a 'Signal'
 --
--- > windowD3 :: HiddenClockReset domain gated synchronous
--- >          => Signal domain Int -> Vec 3 (Signal domain Int)
+-- > windowD3
+-- >   :: HiddenClockResetEnable tag dom
+-- >   => Signal tag Int
+-- >   -> Vec 3 (Signal tag Int)
 -- > windowD3 = windowD
 --
--- >>> simulateB windowD3 [1::Int,2,3,4] :: [Vec 3 Int]
+-- >>> simulateB @System windowD3 [1::Int,2,3,4] :: [Vec 3 Int]
 -- [<0,0,0>,<1,0,0>,<2,1,0>,<3,2,1>,<4,3,2>...
 -- ...
 windowD
-  :: ( HiddenClockReset domain gated synchronous
+  :: ( HiddenClockResetEnable tag dom
      , KnownNat n
      , Default a
      , Undefined a )
-  => Signal domain a               -- ^ Signal to create a window over
-  -> Vec (n + 1) (Signal domain a) -- ^ Window of at least size 1
-windowD = hideClockReset E.windowD
+  => Signal tag a
+  -- ^ Signal to create a window over
+  -> Vec (n + 1) (Signal tag a)
+  -- ^ Window of at least size 1
+windowD = hideClockResetEnable E.windowD
 {-# INLINE windowD #-}

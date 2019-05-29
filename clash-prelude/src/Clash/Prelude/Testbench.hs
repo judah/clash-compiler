@@ -1,6 +1,7 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
                   2017     , Google Inc.
+                  2019     , Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 -}
@@ -25,7 +26,7 @@ import GHC.TypeLits                       (KnownNat)
 
 import qualified Clash.Explicit.Testbench as E
 import           Clash.Signal
-  (HiddenClockReset, Signal, hideClockReset)
+  (HiddenClock, HiddenReset, Signal, hideClock, hideReset)
 import Clash.Sized.BitVector              (BitVector)
 import Clash.Sized.Vector                 (Vec)
 import Clash.XException                   (ShowX)
@@ -45,13 +46,21 @@ import Clash.XException                   (ShowX)
 --
 -- __NB__: This function /can/ be used in synthesizable designs.
 assert
-  :: (Eq a,ShowX a,HiddenClockReset domain gated synchronous)
-  => String   -- ^ Additional message
-  -> Signal domain a -- ^ Checked value
-  -> Signal domain a -- ^ Expected value
-  -> Signal domain b -- ^ Return value
-  -> Signal domain b
-assert = hideClockReset E.assert
+  :: (Eq a, ShowX a, HiddenClock tag dom, HiddenReset tag dom)
+  => String   
+  -- ^ Additional message
+  -> Signal tag a 
+  -- ^ Checked value
+  -> Signal tag a 
+  -- ^ Expected value
+  -> Signal tag b 
+  -- ^ Return value
+  -> Signal tag b
+assert msg actual expected ret =
+  hideReset (hideClock E.assert) msg actual expected ret
+
+--assert {-msg actual expected ret-} =
+--  hideReset (hideClock E.assert) {-msg actual expected ret-}
 {-# INLINE assert #-}
 
 -- | To be used as one of the functions to create the \"magical\" 'testInput'
@@ -62,18 +71,22 @@ assert = hideClockReset E.assert
 --
 -- @
 -- testInput
---   :: HiddenClockReset domain gated synchronous
---   => 'Signal' domain Int
+--   :: HiddenClockResetEnable tag dom
+--   => 'Signal' tag Int
 -- testInput = 'stimuliGenerator' $('Clash.Sized.Vector.listToVecTH' [(1::Int),3..21])
 -- @
 --
 -- >>> sampleN 13 testInput
 -- [1,3,5,7,9,11,13,15,17,19,21,21,21]
 stimuliGenerator
-  :: (KnownNat l, HiddenClockReset domain gated synchronous)
-  => Vec l a  -- ^ Samples to generate
-  -> Signal domain a -- ^ Signal of given samples
-stimuliGenerator = hideClockReset E.stimuliGenerator
+  :: ( KnownNat l
+     , HiddenClock tag dom
+     , HiddenReset tag dom )
+  => Vec l a
+  -- ^ Samples to generate
+  -> Signal tag a
+  -- ^ Signal of given samples
+stimuliGenerator = hideReset (hideClock E.stimuliGenerator)
 {-# INLINE stimuliGenerator #-}
 
 -- | To be used as one of the functions to generate the \"magical\" 'expectedOutput'
@@ -84,8 +97,8 @@ stimuliGenerator = hideClockReset E.stimuliGenerator
 --
 -- @
 -- expectedOutput
---   :: HiddenClockReset domain gated synchronous
---   -> 'Signal' domain Int -> 'Signal' domain Bool
+--   :: HiddenClockResetEnable tag dom
+--   -> 'Signal' tag Int -> 'Signal' tag Bool
 -- expectedOutput = 'outputVerifier' $('Clash.Sized.Vector.listToVecTH' ([70,99,2,3,4,5,7,8,9,10]::[Int]))
 -- @
 --
@@ -113,20 +126,33 @@ stimuliGenerator = hideClockReset E.stimuliGenerator
 --
 -- If your working with 'BitVector's containing don't care bit you should use 'outputVerifierBitVector'.
 outputVerifier
-  :: (KnownNat l, Eq a, ShowX a, HiddenClockReset domain gated synchronous)
-  => Vec l a     -- ^ Samples to compare with
-  -> Signal domain a    -- ^ Signal to verify
-  -> Signal domain Bool -- ^ Indicator that all samples are verified
-outputVerifier = hideClockReset E.outputVerifier
+  :: ( KnownNat l
+     , Eq a
+     , ShowX a
+     , HiddenClock tag dom
+     , HiddenReset tag dom )
+  => Vec l a
+  -- ^ Samples to compare with
+  -> Signal tag a
+  -- ^ Signal to verify
+  -> Signal tag Bool
+  -- ^ Indicator that all samples are verified
+outputVerifier = hideReset (hideClock E.outputVerifier)
 {-# INLINE outputVerifier #-}
 
 
 -- | Same as 'outputVerifier',
 -- but can handle don't care bits in it's expected values.
 outputVerifierBitVector
-  :: (KnownNat l, KnownNat n, HiddenClockReset domain gated synchronous)
-  => Vec l (BitVector n)     -- ^ Samples to compare with
-  -> Signal domain (BitVector n)    -- ^ Signal to verify
-  -> Signal domain Bool -- ^ Indicator that all samples are verified
-outputVerifierBitVector = hideClockReset E.outputVerifierBitVector
+  :: ( KnownNat l
+     , KnownNat n
+     , HiddenClock tag dom
+     , HiddenReset tag dom )
+  => Vec l (BitVector n)
+  -- ^ Samples to compare with
+  -> Signal tag (BitVector n)
+  -- ^ Signal to verify
+  -> Signal tag Bool
+  -- ^ Indicator that all samples are verified
+outputVerifierBitVector = hideReset (hideClock E.outputVerifierBitVector)
 {-# INLINE outputVerifierBitVector #-}

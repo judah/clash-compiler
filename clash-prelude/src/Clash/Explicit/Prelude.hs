@@ -1,17 +1,17 @@
 {-|
 Copyright  :  (C) 2013-2016, University of Twente,
                   2017     , Google Inc.
+                  2019     , Myrtle Software Ltd
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  Christiaan Baaij <christiaan.baaij@gmail.com>
 
 This module defines the explicitly clocked counterparts of the functions
-defined in "Clash.Prelude". Take a look at "Clash.Signal.Explicit" to see how
-you can make multi-clock designs.
+defined in "Clash.Prelude".
 -}
 
-{-# LANGUAGE DataKinds     #-}
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeOperators     #-}
 
 {-# LANGUAGE Unsafe #-}
 
@@ -33,7 +33,7 @@ module Clash.Explicit.Prelude
   , asyncRomPow2
   , rom
   , romPow2
-    -- ** ROMs initialised with a data file
+    -- ** ROMs initialized with a data file
   , asyncRomFile
   , asyncRomFilePow2
   , romFile
@@ -44,7 +44,7 @@ module Clash.Explicit.Prelude
     -- * BlockRAM primitives
   , blockRam
   , blockRamPow2
-    -- ** BlockRAM primitives initialised with a data file
+    -- ** BlockRAM primitives initialized with a data file
   , blockRamFile
   , blockRamFilePow2
   -- ** BlockRAM read/write conflict resolution
@@ -183,50 +183,71 @@ import Clash.XException
 --
 -- @
 -- window4
----  :: Clock domain gated -> Reset domain synchronous
---   -> 'Signal' domain Int -> 'Vec' 4 ('Signal' domain Int)
+---  :: Clock tag
+--   -> Reset tag
+--   -> Enable tag
+--   -> 'Signal' tag Int
+--   -> 'Vec' 4 ('Signal' tag Int)
 -- window4 = 'window'
 -- @
 --
--- >>> simulateB (window4 systemClockGen systemResetGen) [1::Int,2,3,4,5] :: [Vec 4 Int]
+-- >>> simulateB (window4 systemClockGen systemResetGen enableGen) [1::Int,2,3,4,5] :: [Vec 4 Int]
 -- [<1,0,0,0>,<2,1,0,0>,<3,2,1,0>,<4,3,2,1>,<5,4,3,2>...
 -- ...
 window
-  :: (KnownNat n, Undefined a, Default a)
-  => Clock domain gated
-  -- ^ Clock to which the incoming signal is synchronized
-  -> Reset domain synchronous
-  -> Signal domain a               -- ^ Signal to create a window over
-  -> Vec (n + 1) (Signal domain a) -- ^ Window of at least size 1
-window clk rst x = res
+  :: ( KnownNat n
+     , KnownDomain tag dom
+     , Undefined a
+     , Default a
+     )
+  => Clock tag
+  -- ^ Clock to the incoming signal is synchronized
+  -> Reset tag
+  -> Enable tag
+  -> Signal tag a
+  -- ^ Signal to create a window over
+  -> Vec (n + 1) (Signal tag a)
+  -- ^ Window of at least size 1
+window clk rst en x = res
   where
     res  = x :> prev
     prev = case natVal (asNatProxy prev) of
              0 -> repeat def
              _ -> let next = x +>> prev
-                  in  registerB clk rst (repeat def) next
+                  in  registerB clk rst en (repeat def) next
 {-# INLINABLE window #-}
 
 -- | Give a delayed window over a 'Signal'
 --
 -- @
--- windowD3 :: Clock domain gated -> Reset domain synchronous
---          -> 'Signal' domain Int -> 'Vec' 3 ('Signal' domain Int)
+-- windowD3
+--   :: KnownDomain tag dom
+--   -> Clock tag
+--   -> Enable tag
+--   -> Reset tag
+--   -> 'Signal' tag Int
+--   -> 'Vec' 3 ('Signal' tag Int)
 -- windowD3 = 'windowD'
 -- @
 --
--- >>> simulateB (windowD3 systemClockGen asyncResetGen) [1::Int,1,2,3,4] :: [Vec 3 Int]
+-- >>> simulateB (windowD3 systemClockGen resetGen enableGen) [1::Int,1,2,3,4] :: [Vec 3 Int]
 -- [<0,0,0>,<0,0,0>,<1,0,0>,<2,1,0>,<3,2,1>,<4,3,2>...
 -- ...
 windowD
-  :: (KnownNat n, Undefined a, Default a)
-  => Clock domain gated
+  :: ( KnownNat n
+     , Undefined a
+     , Default a
+     , KnownDomain tag dom )
+  => Clock tag
   -- ^ Clock to which the incoming signal is synchronized
-  -> Reset domain synchronous
-  -> Signal domain a                -- ^ Signal to create a window over
-  -> Vec (n + 1) (Signal domain a)  -- ^ Window of at least size 1
-windowD clk rst x =
-  let prev = registerB clk rst (repeat def) next
+  -> Reset tag
+  -> Enable tag
+  -> Signal tag a
+  -- ^ Signal to create a window over
+  -> Vec (n + 1) (Signal tag a)
+  -- ^ Window of at least size 1
+windowD clk rst en x =
+  let prev = registerB clk rst en (repeat def) next
       next = x +>> prev
   in  prev
 {-# INLINABLE windowD #-}
